@@ -1,4 +1,6 @@
-import * as cheerio from 'cheerio'
+// 'cheerio/slim' expõe o mesmo load() sem puxar o undici (que faz require('node:sqlite'),
+// módulo inexistente no Node 20 do Electron 33 e que quebrava o app no Windows).
+import * as cheerio from 'cheerio/slim'
 import {
   CatalogGame,
   GameRecipe,

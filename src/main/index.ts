@@ -11,6 +11,10 @@ import { registerIpcHandlers } from './ipc/handlers'
 
 let mainWindow: BrowserWindow | null = null
 
+// Mantém a pasta de dados fixa em "recomphub" (ex.: ~/.config/recomphub, %APPDATA%\recomphub),
+// independente do productName "RecompHUB", para não perder jogos/configurações já existentes.
+app.setPath('userData', join(app.getPath('appData'), 'recomphub'))
+
 function createWindow(): void {
   const iconPath = join(__dirname, '../../resources/icon.png')
   mainWindow = new BrowserWindow({
