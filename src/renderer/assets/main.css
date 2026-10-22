@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: #171a21;
+    color: #dcdedf;
+    font-family: "Motiva Sans", Arial, Helvetica, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    user-select: none;
+  }
+}
+
+/* Steam-style compact scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #171a21;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3d4450;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #566070;
+}
+
+.steam-btn-green {
+  background: linear-gradient(90deg, #5c7e10 0%, #6fae17 100%);
+}
+.steam-btn-green:hover:not(:disabled) {
+  background: linear-gradient(90deg, #6b9214 0%, #81c71e 100%);
+}
+
+.steam-btn-blue {
+  background: linear-gradient(90deg, #06bfff 0%, #2d73ff 100%);
+}
+.steam-btn-blue:hover:not(:disabled) {
+  background: linear-gradient(90deg, #2ccaff 0%, #4684ff 100%);
+}
+
+.steam-main-gradient {
+  background: linear-gradient(180deg, #1b2838 0%, #171a21 100%);
+}

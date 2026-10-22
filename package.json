@@ -1,0 +1,87 @@
+{
+  "name": "recomphub",
+  "productName": "RecompHUB",
+  "version": "0.1.0-beta.1",
+  "description": "RecompHUB - 1-Click Decomp & Static Recomp PC Launcher (catálogo PortsDR.com)",
+  "main": "./out/main/index.js",
+  "author": {
+    "name": "ArthurxD232",
+    "email": "arthurdebatin23@gmail.com"
+  },
+  "homepage": "https://github.com/ArthurxD232/RecompHUB",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ArthurxD232/RecompHUB.git"
+  },
+  "license": "MIT",
+  "scripts": {
+    "dev": "node scripts/ensure-electron.cjs && electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "node scripts/ensure-electron.cjs && electron-vite preview",
+    "typecheck": "tsc --noEmit",
+    "dist:linux": "electron-vite build && electron-builder --linux AppImage tar.gz",
+    "dist:win": "electron-vite build && electron-builder --win zip portable",
+    "dist": "electron-vite build && electron-builder --linux AppImage tar.gz --win zip portable"
+  },
+  "build": {
+    "appId": "com.recomphub.launcher",
+    "productName": "RecompHUB",
+    "artifactName": "RecompHUB-beta-0.1-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Game",
+      "executableName": "recomphub",
+      "synopsis": "Launcher 1-Click para jogos descompilados e recompilados (PortsDR)",
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "zip",
+        "portable"
+      ]
+    }
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "cheerio": "^1.0.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.4",
+    "tar": "^7.4.3"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^3.0.0",
+    "@types/adm-zip": "^0.5.5",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

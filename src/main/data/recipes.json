@@ -1,0 +1,454 @@
+[
+  {
+    "id": "zelda64recomp",
+    "repoFullName": "Zelda64Recomp/Zelda64Recomp",
+    "aliases": ["Wiseguy/Zelda64Recomp", "Mr-Wiseguy/Zelda64Recomp"],
+    "title": "The Legend of Zelda: Majora's Mask (Zelda64Recomp)",
+    "console": "N64",
+    "family": "N64Recomp",
+    "createPortableTxt": true,
+    "configFileToPatch": {
+      "filename": "config.toml",
+      "romKey": "rom_path"
+    },
+    "executableHints": ["Zelda64Recompiled", "Zelda64Recompiled.exe"],
+    "requirements": [
+      {
+        "id": "mm_us_10",
+        "label": "Majora's Mask (USA) v1.0 Big-Endian (.z64)",
+        "type": "rom",
+        "expectedFilename": "mm.us.rev1.rom.z64",
+        "sha1": ["d6133ace5afaa0882cf214cf88daba39e266c078"],
+        "md5": ["2a0a8acb61538235bc1094d297fb6556"],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Cria automaticamente portable.txt e vincula a ROM USA v1.0 como mm.us.rev1.rom.z64."
+  },
+  {
+    "id": "banjorecomp",
+    "repoFullName": "BanjoRecomp/BanjoRecomp",
+    "title": "Banjo-Kazooie (BanjoRecomp)",
+    "console": "N64",
+    "family": "N64Recomp",
+    "createPortableTxt": true,
+    "configFileToPatch": {
+      "filename": "config.toml",
+      "romKey": "rom_path"
+    },
+    "executableHints": ["BanjoRecompiled", "BanjoRecompiled.exe"],
+    "requirements": [
+      {
+        "id": "bk_us_10",
+        "label": "Banjo-Kazooie (USA) v1.0 (.z64)",
+        "type": "rom",
+        "expectedFilename": "banjo.us.v10.z64",
+        "sha1": ["1fe1632098865f639e22c11b9a81ee8f29c75d7a"],
+        "md5": ["b29599651a13f681c9923d69354bf4a3"],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Configuração 1-Click N64Recomp com portable.txt e vínculo automático banjo.us.v10.z64."
+  },
+  {
+    "id": "banjotooierecomp",
+    "repoFullName": "some-scurvy-dog/BanjoTooieRecompiled",
+    "title": "Banjo-Tooie (BanjoTooieRecompiled)",
+    "console": "N64",
+    "family": "N64Recomp",
+    "createPortableTxt": true,
+    "executableHints": ["BanjoTooieRecompiled", "BanjoTooieRecompiled.exe"],
+    "requirements": [
+      {
+        "id": "bt_us",
+        "label": "Banjo-Tooie (USA) (.z64)",
+        "type": "rom",
+        "expectedFilename": "banjotooie.us.z64",
+        "sha1": ["af1a89e12b638b8d82cc4c085c8e01d4db03fb33"],
+        "md5": ["40e98faa24ac3ebe1d25cb5f2f49e478"],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Cria portable.txt e vincula ROM validada via SHA-1."
+  },
+  {
+    "id": "cbfd-recompiled",
+    "repoFullName": "sciaschi/CBFD-Recompiled",
+    "title": "Conker's Bad Fur Day (CBFD-Recompiled)",
+    "console": "N64",
+    "family": "N64Recomp",
+    "createPortableTxt": true,
+    "executableHints": ["CBFDRecompiled", "CBFDRecompiled.exe", "ConkerRecompiled.exe"],
+    "requirements": [
+      {
+        "id": "cbfd_us",
+        "label": "Conker's Bad Fur Day (USA) (.z64)",
+        "type": "rom",
+        "expectedFilename": "conker.us.z64",
+        "sha1": ["30defc7c6b9b0b1817b63b7c847811343850b2f3"],
+        "md5": ["00e2920665f2329b95797a7e2c6eb358"],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Cria portable.txt e vincula conker.us.z64 automaticamente."
+  },
+  {
+    "id": "aerogauge-recomp",
+    "repoFullName": "alondero/aerogauge-recomp",
+    "title": "AeroGauge (aerogauge-recomp)",
+    "console": "N64",
+    "family": "N64Recomp",
+    "createPortableTxt": true,
+    "executableHints": ["AeroGaugeRecompiled", "AeroGaugeRecompiled.exe"],
+    "requirements": [
+      {
+        "id": "aerogauge_us",
+        "label": "AeroGauge (USA) Rev 1 (.z64)",
+        "type": "rom",
+        "expectedFilename": "aerogauge.us.z64",
+        "sha1": ["5b45fc53ea3f55bf9c29f95ff38c3c27bf19d9ff"],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Receita N64Recomp para AeroGauge com portable.txt."
+  },
+  {
+    "id": "bm64recomp",
+    "repoFullName": "RevoSucks/BM64Recomp",
+    "title": "Bomberman 64 (BM64Recomp)",
+    "console": "N64",
+    "family": "N64Recomp",
+    "createPortableTxt": true,
+    "executableHints": ["BM64Recomp", "BM64Recomp.exe"],
+    "requirements": [
+      {
+        "id": "bm64_us",
+        "label": "Bomberman 64 (USA) (.z64)",
+        "type": "rom",
+        "expectedFilename": "bm64.us.z64",
+        "sha1": ["3f1d74a8dc4cd0fd80f2ef7bc43d8936a1a41f14"],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ]
+  },
+  {
+    "id": "bmherorecomp",
+    "repoFullName": "RevoSucks/BMHeroRecomp",
+    "title": "Bomberman Hero (BMHeroRecomp)",
+    "console": "N64",
+    "family": "N64Recomp",
+    "createPortableTxt": true,
+    "executableHints": ["BMHeroRecomp", "BMHeroRecomp.exe"],
+    "requirements": [
+      {
+        "id": "bmhero_us",
+        "label": "Bomberman Hero (USA) (.z64)",
+        "type": "rom",
+        "expectedFilename": "bmhero.us.z64",
+        "sha1": ["62364ef5cc47f0a69d52cd8cb6c2e41e773fb1da"],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ]
+  },
+  {
+    "id": "goemon64recomp",
+    "repoFullName": "klorfmorf/Goemon64Recomp",
+    "title": "Mystical Ninja Starring Goemon (Goemon64Recomp)",
+    "console": "N64",
+    "family": "N64Recomp",
+    "createPortableTxt": true,
+    "executableHints": ["Goemon64Recompiled", "Goemon64Recompiled.exe"],
+    "requirements": [
+      {
+        "id": "goemon_us",
+        "label": "Mystical Ninja Starring Goemon (USA) (.z64)",
+        "type": "rom",
+        "expectedFilename": "goemon64.us.z64",
+        "sha1": ["56fc3eb7f9f5d79b22ce8d320fe474ba3a14c210"],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ]
+  },
+  {
+    "id": "apeescaperecomp",
+    "repoFullName": "mstan/ApeEscapeRecomp",
+    "title": "Ape Escape (ApeEscapeRecomp)",
+    "console": "PS1",
+    "family": "PSXRecomp",
+    "executableHints": ["ApeEscapeRecomp", "ApeEscapeRecomp.exe"],
+    "requirements": [
+      {
+        "id": "ps1_bios_scph1001",
+        "label": "PlayStation BIOS (SCPH1001.BIN)",
+        "type": "bios",
+        "expectedFilename": "SCPH1001.BIN",
+        "sha1": ["10155d8d6e6e832d6ea66db9bc098321fb5e8ebf"],
+        "md5": ["924e392ed05558ffdb115408c263dccf"],
+        "extensions": [".bin", ".rom"],
+        "region": "USA"
+      },
+      {
+        "id": "ape_escape_bin",
+        "label": "Ape Escape (USA) Track 1 (.bin / .iso)",
+        "type": "bin_cue",
+        "expectedFilename": "Ape Escape (USA).bin",
+        "sha1": ["f12d4a5a05f37e27292e6efbd19f5216f333572c"],
+        "extensions": [".bin", ".iso", ".cue", ".img"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Vincula automaticamente a BIOS SCPH1001.BIN e os arquivos .bin/.cue do Ape Escape."
+  },
+  {
+    "id": "crash2recomp",
+    "repoFullName": "Zumbo06/Crash2Recomp",
+    "title": "Crash Bandicoot 2: Cortex Strikes Back (Crash2Recomp)",
+    "console": "PS1",
+    "family": "PSXRecomp",
+    "executableHints": ["Crash2Recomp", "Crash2Recomp.exe"],
+    "requirements": [
+      {
+        "id": "ps1_bios_scph1001",
+        "label": "PlayStation BIOS (SCPH1001.BIN)",
+        "type": "bios",
+        "expectedFilename": "SCPH1001.BIN",
+        "sha1": ["10155d8d6e6e832d6ea66db9bc098321fb5e8ebf"],
+        "md5": ["924e392ed05558ffdb115408c263dccf"],
+        "extensions": [".bin", ".rom"],
+        "region": "USA"
+      },
+      {
+        "id": "crash2_bin",
+        "label": "Crash Bandicoot 2 (USA) (.bin / .cue)",
+        "type": "bin_cue",
+        "expectedFilename": "Crash2.bin",
+        "extensions": [".bin", ".cue", ".iso"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Receita PSXRecomp: vincula BIOS SCPH1001.BIN e imagem .bin/.cue na pasta do jogo."
+  },
+  {
+    "id": "toshindenrecomp",
+    "repoFullName": "mstan/BattleArenaToshindenRecomp",
+    "title": "Battle Arena Toshinden (BattleArenaToshindenRecomp)",
+    "console": "PS1",
+    "family": "PSXRecomp",
+    "executableHints": ["BattleArenaToshindenRecomp", "BattleArenaToshindenRecomp.exe"],
+    "requirements": [
+      {
+        "id": "ps1_bios_scph1001",
+        "label": "PlayStation BIOS (SCPH1001.BIN)",
+        "type": "bios",
+        "expectedFilename": "SCPH1001.BIN",
+        "sha1": ["10155d8d6e6e832d6ea66db9bc098321fb5e8ebf"],
+        "md5": ["924e392ed05558ffdb115408c263dccf"],
+        "extensions": [".bin", ".rom"],
+        "region": "USA"
+      },
+      {
+        "id": "toshinden_bin",
+        "label": "Battle Arena Toshinden (USA) (.bin / .cue)",
+        "type": "bin_cue",
+        "expectedFilename": "Toshinden.bin",
+        "extensions": [".bin", ".cue", ".iso"],
+        "region": "USA"
+      }
+    ]
+  },
+  {
+    "id": "unleashedrecomp",
+    "repoFullName": "hedge-dev/UnleashedRecomp",
+    "title": "Sonic Unleashed (UnleashedRecomp / XenonRecomp)",
+    "console": "Xbox 360",
+    "family": "XenonRecomp",
+    "xenonConfig": {
+      "extractXisoArgs": ["-x"],
+      "targetSubdir": "."
+    },
+    "executableHints": ["UnleashedRecomp", "UnleashedRecomp.exe"],
+    "requirements": [
+      {
+        "id": "sonic_unleashed_iso",
+        "label": "Sonic Unleashed (Xbox 360 ISO)",
+        "type": "iso",
+        "expectedFilename": "SonicUnleashed.iso",
+        "extensions": [".iso", ".xex"],
+        "region": "USA/EUR"
+      }
+    ],
+    "notes": "Extrai a ISO de Xbox 360 usando extract-xiso e posiciona o binário recompilado na raiz."
+  },
+  {
+    "id": "ac5-recomp",
+    "repoFullName": "sal063/Ace-Combat-5-Static-recompilation",
+    "title": "Ace Combat 5: The Unsung War (ps2recomp)",
+    "console": "PS2",
+    "family": "GenericNative",
+    "createPortableTxt": true,
+    "executableHints": ["ac5.exe", "ac5"],
+    "requirements": [
+      {
+        "id": "ac5_us_iso",
+        "label": "Ace Combat 5: The Unsung War (USA SLUS-20851 ISO ou .7z/.zip/.rar)",
+        "type": "iso",
+        "expectedFilename": "game.iso",
+        "extensions": [".iso"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Extrai o pacote Release.rar (runtime/ac5.exe + shaders), vincula a ISO do PS2 como game.iso e executa ac5.exe com --data . --disc game.iso --vblanks 0 --watchdog 0."
+  },
+  {
+    "id": "ac6-recomp",
+    "repoFullName": "sal063/AC6_recomp",
+    "title": "Ace Combat 6: Fires of Liberation (AC6_recomp)",
+    "console": "Xbox 360",
+    "family": "XenonRecomp",
+    "xenonConfig": {
+      "extractXisoArgs": ["-x"],
+      "targetSubdir": "."
+    },
+    "executableHints": ["AC6_recomp.exe", "AC6_recomp"],
+    "requirements": [
+      {
+        "id": "ac6_iso",
+        "label": "Ace Combat 6 (Xbox 360 ISO)",
+        "type": "iso",
+        "expectedFilename": "AC6.iso",
+        "extensions": [".iso", ".xex"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Extrai a ISO de Xbox 360 via extract-xiso e posiciona o executável AC6_recomp na raiz."
+  },
+  {
+    "id": "condemned2recomp",
+    "repoFullName": "psxrestore/Condemned2Recomp",
+    "title": "Condemned 2: Bloodshot (Condemned2Recomp)",
+    "console": "Xbox 360",
+    "family": "XenonRecomp",
+    "xenonConfig": {
+      "extractXisoArgs": ["-x"],
+      "targetSubdir": "."
+    },
+    "executableHints": ["Condemned2Recomp.exe", "Condemned2Recomp"],
+    "requirements": [
+      {
+        "id": "condemned2_iso",
+        "label": "Condemned 2: Bloodshot (Xbox 360 ISO)",
+        "type": "iso",
+        "expectedFilename": "Condemned2.iso",
+        "extensions": [".iso", ".xex"]
+      }
+    ]
+  },
+  {
+    "id": "shipofharkinian",
+    "repoFullName": "HarbourMasters/Shipwright",
+    "title": "The Legend of Zelda: Ocarina of Time (Ship of Harkinian)",
+    "console": "N64",
+    "family": "AssetExtractor",
+    "extractorConfig": {
+      "binaryPatterns": ["soh.appimage", "soh.exe", "soh", "otrgui", "torch"],
+      "cliArgs": ["--extract-assets"],
+      "expectedOutputFiles": ["oot.o2r", "oot.otr", "oot-mq.o2r", "oot-mq.otr"]
+    },
+    "executableHints": ["soh.appimage", "soh.exe", "soh"],
+    "requirements": [
+      {
+        "id": "oot_rom",
+        "label": "Ocarina of Time (PAL GC / Master Quest / N64 .z64)",
+        "type": "rom",
+        "expectedFilename": "oot.z64",
+        "sha1": [
+          "cee6bc3c2a634b41728f2af8da54d9bf8cc14099",
+          "50bebedad9e0f10746a52b07239e47fa6c284d03",
+          "ad69c91157f6705e8ab06c79fe08aad47bb57ba7"
+        ],
+        "extensions": [".z64", ".n64", ".v64"]
+      }
+    ],
+    "notes": "Posiciona a ROM oot.z64 e executa o extrator de assets para gerar oot.o2r / oot.otr."
+  },
+  {
+    "id": "2ship2harkinian",
+    "repoFullName": "HarbourMasters/2ship2harkinian",
+    "aliases": ["2ship2harkinian/2ship2harkinian"],
+    "title": "The Legend of Zelda: Majora's Mask (2 Ship 2 Harkinian)",
+    "console": "N64",
+    "family": "AssetExtractor",
+    "extractorConfig": {
+      "binaryPatterns": ["2ship.appimage", "2ship.exe", "2ship", "torch"],
+      "cliArgs": ["--extract-assets"],
+      "expectedOutputFiles": ["mm.o2r", "2ship.o2r"]
+    },
+    "executableHints": ["2ship.appimage", "2ship.exe", "2ship"],
+    "requirements": [
+      {
+        "id": "mm_us_10",
+        "label": "Majora's Mask (USA) v1.0 (.z64)",
+        "type": "rom",
+        "expectedFilename": "mm.us.rev1.rom.z64",
+        "sha1": ["d6133ace5afaa0882cf214cf88daba39e266c078"],
+        "md5": ["2a0a8acb61538235bc1094d297fb6556"],
+        "extensions": [".z64", ".n64", ".v64"]
+      }
+    ],
+    "notes": "Posiciona a ROM validada de Majora's Mask e aciona a geração de pacotes .o2r."
+  },
+  {
+    "id": "spaghettikart",
+    "repoFullName": "HarbourMasters/SpaghettiKart",
+    "title": "Mario Kart 64 (SpaghettiKart)",
+    "console": "N64",
+    "family": "AssetExtractor",
+    "extractorConfig": {
+      "binaryPatterns": ["SpaghettiKart.appimage", "SpaghettiKart.exe", "SpaghettiKart", "torch"],
+      "cliArgs": ["--extract-assets"],
+      "expectedOutputFiles": ["mk64.o2r"]
+    },
+    "executableHints": ["SpaghettiKart.appimage", "SpaghettiKart.exe", "SpaghettiKart"],
+    "requirements": [
+      {
+        "id": "mk64_us",
+        "label": "Mario Kart 64 (USA) (.z64)",
+        "type": "rom",
+        "expectedFilename": "baserom.us.z64",
+        "sha1": ["579c48e211ae952530ffc8738709f078d5dd215e"],
+        "extensions": [".z64", ".n64", ".v64"]
+      }
+    ]
+  },
+  {
+    "id": "opengoal",
+    "repoFullName": "open-goal/jak-project",
+    "title": "Jak and Daxter: The Precursor Legacy (OpenGOAL)",
+    "console": "PS2",
+    "family": "AssetExtractor",
+    "extractorConfig": {
+      "binaryPatterns": ["extractor", "extractor.exe"],
+      "cliArgs": ["-f", "{ROM_PATH}", "--extract", "--compile"],
+      "expectedOutputFiles": ["iso_data"]
+    },
+    "executableHints": ["gk", "gk.exe"],
+    "requirements": [
+      {
+        "id": "jak1_iso",
+        "label": "Jak and Daxter: The Precursor Legacy (PS2 ISO)",
+        "type": "iso",
+        "expectedFilename": "jak1.iso",
+        "extensions": [".iso"]
+      }
+    ],
+    "notes": "Executa o binário extractor via CLI passando a ISO do PS2 para descompilar e gerar iso_data."
+  }
+]
