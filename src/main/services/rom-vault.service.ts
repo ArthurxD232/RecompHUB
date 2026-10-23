@@ -194,6 +194,9 @@ export class RomVaultService {
           }
         }
       )
+    } else {
+      // Direct file: check if it's an unconverted N64 ROM needing byte normalization
+      finalRomPath = this.normalizeN64RomInPlace(pickedFilePath)
     }
 
     if (onProgress) {
@@ -278,24 +281,76 @@ export class RomVaultService {
       (req?.extensions || []).map((e) => e.toLowerCase())
     )
 
-    const matchingByReqExt = extractedFiles.filter((f) =>
-      preferredExts.has(path.extname(f).toLowerCase())
-    )
-    if (matchingByReqExt.length > 0) {
-      matchingByReqExt.sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)
-      return matchingByReqExt[0]
-    }
+    const chosenFile =
+      matchingByReqExt.length > 0
+        ? matchingByReqExt[0]
+        : matchingSupported.length > 0
+          ? matchingSupported[0]
+          : extractedFiles[0]
 
-    const matchingSupported = extractedFiles.filter((f) =>
-      SUPPORTED_ROM_EXTENSIONS.has(path.extname(f).toLowerCase())
-    )
-    if (matchingSupported.length > 0) {
-      matchingSupported.sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)
-      return matchingSupported[0]
-    }
+    return this.normalizeN64RomInPlace(chosenFile)
+  }
 
-    extractedFiles.sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)
-    return extractedFiles[0]
+  /**
+   * Checks if an N64 ROM file is byte-swapped (.v64, 0x37804012) or little-endian (.n64, 0x40123780)
+   * and automatically converts it in-place to canonical Big-Endian (.z64, 0x80371240).
+   * This guarantees that SHA-1 verification matches canonical databases and prevents recompiler crashes.
+   */
+  public normalizeN64RomInPlace(filePath: string): string {
+    try {
+      if (!fs.existsSync(filePath)) return filePath
+      const stat = fs.statSync(filePath)
+      if (stat.size < 4 || stat.size > 64 * 1024 * 1024) return filePath
+
+      const fd = fs.openSync(filePath, 'r')
+      const magicBuf = Buffer.alloc(4)
+      fs.readSync(fd, magicBuf, 0, 4, 0)
+      fs.closeSync(fd)
+
+      const magic = magicBuf.readUInt32BE(0)
+      if (magic === 0x80371240) {
+        // Already canonical big-endian .z64
+        return filePath
+      }
+
+      if (magic === 0x37804012 || magic === 0x40123780) {
+        const data = fs.readFileSync(filePath)
+        const swapped = Buffer.alloc(data.length)
+
+        if (magic === 0x37804012) {
+          // BADC -> ABCD (v64 byte-swap)
+          for (let i = 0; i < data.length; i += 2) {
+            swapped[i] = data[i + 1]
+            swapped[i + 1] = data[i]
+          }
+        } else {
+          // DCBA -> ABCD (n64 word-swap)
+          for (let i = 0; i < data.length; i += 4) {
+            swapped[i] = data[i + 3]
+            swapped[i + 1] = data[i + 2]
+            swapped[i + 2] = data[i + 1]
+            swapped[i + 3] = data[i]
+          }
+        }
+
+        const dir = path.dirname(filePath)
+        const baseWithoutExt = path.basename(filePath, path.extname(filePath))
+        const newZ64Path = path.join(dir, `${baseWithoutExt}.z64`)
+
+        fs.writeFileSync(newZ64Path, swapped)
+        if (path.resolve(newZ64Path) !== path.resolve(filePath)) {
+          try {
+            fs.unlinkSync(filePath)
+          } catch {
+            // Ignore unlink
+          }
+        }
+        return newZ64Path
+      }
+    } catch {
+      // Return original on error
+    }
+    return filePath
   }
 
   private extractWithSystemTool(
@@ -405,10 +460,46 @@ export class RomVaultService {
     return files
   }
 
-  public computeFileHashes(
+  public async computeFileHashes(
     filePath: string,
     fastModeForLargeIso = false
   ): Promise<{ sha1: string; md5: string }> {
+    try {
+      const stat = fs.statSync(filePath)
+      // Check for N64 ROMs (<= 64MB) in non-canonical byte order to report canonical big-endian hashes
+      if (stat.size >= 4 && stat.size <= 64 * 1024 * 1024) {
+        const fd = fs.openSync(filePath, 'r')
+        const magicBuf = Buffer.alloc(4)
+        fs.readSync(fd, magicBuf, 0, 4, 0)
+        fs.closeSync(fd)
+        const magic = magicBuf.readUInt32BE(0)
+
+        if (magic === 0x37804012 || magic === 0x40123780) {
+          const data = fs.readFileSync(filePath)
+          const swapped = Buffer.alloc(data.length)
+          if (magic === 0x37804012) {
+            for (let i = 0; i < data.length; i += 2) {
+              swapped[i] = data[i + 1]
+              swapped[i + 1] = data[i]
+            }
+          } else {
+            for (let i = 0; i < data.length; i += 4) {
+              swapped[i] = data[i + 3]
+              swapped[i + 1] = data[i + 2]
+              swapped[i + 2] = data[i + 1]
+              swapped[i + 3] = data[i]
+            }
+          }
+          return {
+            sha1: crypto.createHash('sha1').update(swapped).digest('hex').toLowerCase(),
+            md5: crypto.createHash('md5').update(swapped).digest('hex').toLowerCase()
+          }
+        }
+      }
+    } catch {
+      // Continue to standard calculation
+    }
+
     if (fastModeForLargeIso) {
       try {
         const stat = fs.statSync(filePath)

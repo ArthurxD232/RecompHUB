@@ -92,19 +92,34 @@ export class RecipeService {
 
       const destPath = path.join(installDir, req.expectedFilename)
       try {
+        const isN64Game =
+          recipe.console === 'N64' ||
+          recipe.family === 'N64Recomp' ||
+          destPath.toLowerCase().endsWith('.z64') ||
+          localEntry.filePath.toLowerCase().endsWith('.n64') ||
+          localEntry.filePath.toLowerCase().endsWith('.v64') ||
+          localEntry.filePath.toLowerCase().endsWith('.z64')
+
         await this.linkOrCopyRom(
           localEntry,
           destPath,
           settings.linkStrategy,
-          recipe.family === 'N64Recomp',
+          isN64Game,
           log
         )
         pairedRomPaths.push(destPath)
 
         // Also link with the original filename in installDir if different, so ports that look
-        // for original dump names or open a file picker in cwd find it immediately
+        // for original dump names or open a file picker in cwd find it immediately.
+        // NOTE: If the original file was an unconverted N64 format (.n64/.v64), do NOT create an unconverted
+        // duplicate that could cause asset extractors (like ZAPD) or recompilers to segfault!
         const origDestPath = path.join(installDir, localEntry.fileName)
+        const isUnconvertedN64Name =
+          origDestPath.toLowerCase().endsWith('.n64') ||
+          origDestPath.toLowerCase().endsWith('.v64')
+
         if (
+          !isUnconvertedN64Name &&
           path.resolve(origDestPath) !== path.resolve(destPath) &&
           !fs.existsSync(origDestPath)
         ) {
@@ -262,7 +277,8 @@ export class RecipeService {
     }
 
     // Check if N64 ROM needs byte-order conversion to .z64 (big-endian 0x80371240)
-    if (ensureBigEndianZ64 && destPath.toLowerCase().endsWith('.z64')) {
+    const isDestZ64 = destPath.toLowerCase().endsWith('.z64')
+    if (ensureBigEndianZ64 || isDestZ64) {
       const needsSwap = this.checkN64ByteSwapNeeded(entry.filePath)
       if (needsSwap !== 'none') {
         log(
@@ -459,12 +475,60 @@ export class RecipeService {
     const extCfg = recipe.extractorConfig
     if (!extCfg) return
 
-    // Check if dedicated CLI extractor binary (like OpenGOAL's `extractor` or `torch`) exists
     const files = this.listFilesRecursive(installDir, 2)
-    const dedicatedExtractor = files.find((f) => {
+
+    // Check if expected output packages are already generated (e.g. mm.o2r, oot.o2r)
+    const expectedOutputs = extCfg.expectedOutputFiles || []
+    const requiredArchives = expectedOutputs.filter(
+      (name) => name !== '2ship.o2r' && name !== 'soh.otr'
+    )
+    const allExpectedGenerated =
+      requiredArchives.length > 0 &&
+      requiredArchives.every((name) => {
+        const p = path.join(installDir, name)
+        return fs.existsSync(p) && fs.statSync(p).size > 1024 * 1024
+      })
+
+    if (allExpectedGenerated) {
+      log(`Pacotes de assets (${requiredArchives.join(', ')}) já se encontram gerados. Pronto para jogar!`)
+      return
+    }
+
+    // 1. Check if dedicated CLI extractor binary (like OpenGOAL's `extractor` or `torch`) exists
+    let dedicatedExtractor = files.find((f) => {
       const base = path.basename(f).toLowerCase()
-      return base === 'extractor' || base === 'extractor.exe' || base === 'torch' || base === 'torch.exe'
+      return (
+        base === 'extractor' ||
+        base === 'extractor.exe' ||
+        base === 'torch' ||
+        base === 'torch.exe'
+      )
     })
+
+    let extractorArgs = extCfg.cliArgs.map((arg) =>
+      arg.replace('{ROM_PATH}', romPath).replace('{INSTALL_DIR}', installDir)
+    )
+
+    // 2. If no standalone extractor binary, look for integrated ports (like 2Ship2Harkinian, Ship of Harkinian)
+    if (!dedicatedExtractor) {
+      const execCandidate = files.find((f) => {
+        const base = path.basename(f).toLowerCase()
+        return (
+          base.includes('2ship') ||
+          base.includes('soh') ||
+          base.includes('spaghettikart')
+        )
+      })
+
+      if (execCandidate) {
+        dedicatedExtractor = execCandidate
+        if (execCandidate.toLowerCase().endsWith('.appimage')) {
+          extractorArgs = ['--appimage-extract-and-run']
+        } else {
+          extractorArgs = []
+        }
+      }
+    }
 
     if (!dedicatedExtractor) {
       log(
@@ -481,36 +545,101 @@ export class RecipeService {
       }
     }
 
-    const args = extCfg.cliArgs.map((arg) =>
-      arg.replace('{ROM_PATH}', romPath).replace('{INSTALL_DIR}', installDir)
-    )
-
-    log(`Executando extrator de assets CLI: ${path.basename(dedicatedExtractor)} ${args.join(' ')}`)
+    log(`Iniciando geração de assets (.o2r/.otr) com ${path.basename(dedicatedExtractor)}...`)
 
     await new Promise<void>((resolve) => {
-      const child = spawn(dedicatedExtractor, args, {
+      let finished = false
+      const finishOnce = (reason: string): void => {
+        if (finished) return
+        finished = true
+        clearInterval(pollInterval)
+        log(reason)
+        try {
+          child.kill('SIGTERM')
+        } catch {
+          // Ignore
+        }
+        setTimeout(() => {
+          try {
+            child.kill('SIGKILL')
+          } catch {
+            // Ignore
+          }
+          resolve()
+        }, 500)
+      }
+
+      const checkOutputFiles = (): void => {
+        if (
+          requiredArchives.length > 0 &&
+          requiredArchives.every((name) => {
+            const p = path.join(installDir, name)
+            return fs.existsSync(p) && fs.statSync(p).size > 1024 * 1024
+          })
+        ) {
+          finishOnce('Arquivo(s) .o2r/.otr gerado(s) com sucesso na raiz do jogo!')
+        }
+      }
+
+      const pollInterval = setInterval(checkOutputFiles, 1000)
+
+      const child = spawn(dedicatedExtractor, extractorArgs, {
         cwd: installDir
       })
 
-      child.stdout.on('data', (d) => {
-        const line = d.toString().trim()
-        if (line) log(`[Extractor] ${line}`)
-      })
+      const handleData = (d: Buffer): void => {
+        const text = d.toString()
+        const lines = text.split('\n')
+        for (const rawLine of lines) {
+          const line = rawLine.trim()
+          if (!line) continue
 
-      child.stderr.on('data', (d) => {
-        const line = d.toString().trim()
-        if (line) log(`[Extractor] ${line}`)
-      })
+          // Log extraction progress milestones
+          if (
+            line.includes('/ 660') ||
+            line.includes('Generating OTR') ||
+            line.includes('Generating O2R') ||
+            line.includes('Loaded ZIP (O2R)')
+          ) {
+            log(`[AssetExtractor] ${line}`)
+          }
+
+          if (
+            line.includes('Loaded ZIP (O2R) archive:') ||
+            line.includes('Starting 2 Ship 2 Harkinian') ||
+            line.includes('Starting Ship of Harkinian')
+          ) {
+            finishOnce('Extração de assets concluída com sucesso! Jogo 100% pronto para jogar.')
+          }
+        }
+      }
+
+      child.stdout?.on('data', handleData)
+      child.stderr?.on('data', handleData)
 
       child.on('error', (err) => {
-        log(`Aviso ao executar extrator CLI: ${err.message}`)
+        clearInterval(pollInterval)
+        log(`Aviso ao executar extrator: ${err.message}`)
         resolve()
       })
 
       child.on('close', (code) => {
-        log(`Extrator de assets finalizado (código ${code ?? 0}).`)
-        resolve()
+        clearInterval(pollInterval)
+        checkOutputFiles()
+        if (!finished) {
+          log(`Processo de extração finalizado (código ${code ?? 0}).`)
+          resolve()
+        }
       })
+
+      // Safety timeout: 3 minutes max
+      setTimeout(() => {
+        if (!finished) {
+          clearInterval(pollInterval)
+          checkOutputFiles()
+          finishOnce('Geração de assets finalizada ou tempo limite atingido. Continuando...')
+        }
+      }, 180000)
     })
   }
 
