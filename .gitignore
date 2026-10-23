@@ -6,3 +6,5 @@ dist/
 .DS_Store
 .env
 .vite/
+*.tsbuildinfo
+
