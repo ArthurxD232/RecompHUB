@@ -51,6 +51,13 @@ export function registerIpcHandlers(
   })
 
   // Catalog
+  catalog.onUpdated((result) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('event:catalogUpdated', result)
+    }
+  })
+
   ipcMain.handle('catalog:get', async (_e, forceRefresh?: boolean) => {
     return catalog.getCatalog(Boolean(forceRefresh))
   })

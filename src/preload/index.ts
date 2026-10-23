@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   AppSettings,
+  CatalogResult,
   DownloadTaskProgress,
   InstalledGame,
   RecompHubAPI,
@@ -11,6 +12,11 @@ const api: RecompHubAPI = {
   // Catalog
   getCatalog: (forceRefresh?: boolean) =>
     ipcRenderer.invoke('catalog:get', forceRefresh),
+  onCatalogUpdated: (callback: (result: CatalogResult) => void) => {
+    const handler = (_e: any, data: CatalogResult): void => callback(data)
+    ipcRenderer.on('event:catalogUpdated', handler)
+    return () => ipcRenderer.removeListener('event:catalogUpdated', handler)
+  },
   resolveRelease: (gameId: string) =>
     ipcRenderer.invoke('catalog:resolveRelease', gameId),
 

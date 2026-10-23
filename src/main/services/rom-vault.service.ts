@@ -62,6 +62,16 @@ const COMPRESSED_ARCHIVE_EXTENSIONS = new Set([
   '.xz'
 ])
 
+function isPathInsideDirectory(directory: string, filePath: string): boolean {
+  const relativePath = path.relative(path.resolve(directory), path.resolve(filePath))
+  return (
+    relativePath === '' ||
+    (relativePath !== '..' &&
+      !relativePath.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relativePath))
+  )
+}
+
 export class RomVaultService {
   constructor(private store: StoreService) {}
 
@@ -97,7 +107,7 @@ export class RomVaultService {
 
     for (const existing of this.store.getRomVault()) {
       if (
-        !existing.filePath.startsWith(targetDir) &&
+        !isPathInsideDirectory(targetDir, existing.filePath) &&
         fs.existsSync(existing.filePath)
       ) {
         results.push(existing)
@@ -119,7 +129,13 @@ export class RomVaultService {
       try {
         const stat = fs.statSync(filePath)
         const cached = existingByPath.get(filePath)
-        if (cached && cached.size === stat.size && cached.sha1 && cached.md5) {
+        if (
+          cached &&
+          cached.size === stat.size &&
+          cached.fileModifiedAt === stat.mtimeMs &&
+          cached.sha1 &&
+          cached.md5
+        ) {
           results.push(cached)
           continue
         }
@@ -129,6 +145,7 @@ export class RomVaultService {
           filePath,
           fileName,
           size: stat.size,
+          fileModifiedAt: stat.mtimeMs,
           sha1: sha1.toLowerCase(),
           md5: md5.toLowerCase(),
           extension: path.extname(filePath).toLowerCase(),
@@ -195,8 +212,11 @@ export class RomVaultService {
         }
       )
     } else {
-      // Direct file: check if it's an unconverted N64 ROM needing byte normalization
-      finalRomPath = this.normalizeN64RomInPlace(pickedFilePath)
+      const vaultDir = path.join(
+        this.store.getSettings().romVaultPath,
+        game.id.replace(/[^a-z0-9_-]+/gi, '_').slice(0, 60)
+      )
+      finalRomPath = this.normalizeN64Rom(pickedFilePath, vaultDir)
     }
 
     if (onProgress) {
@@ -214,6 +234,7 @@ export class RomVaultService {
       filePath: finalRomPath,
       fileName: path.basename(finalRomPath),
       size: stat.size,
+      fileModifiedAt: stat.mtimeMs,
       sha1: sha1.toLowerCase(),
       md5: md5.toLowerCase(),
       extension: path.extname(finalRomPath).toLowerCase(),
@@ -281,22 +302,23 @@ export class RomVaultService {
       (req?.extensions || []).map((e) => e.toLowerCase())
     )
 
+    const matchingByReqExt = extractedFiles.filter((filePath) =>
+      preferredExts.has(path.extname(filePath).toLowerCase())
+    )
+    const matchingSupported = extractedFiles.filter((filePath) =>
+      SUPPORTED_ROM_EXTENSIONS.has(path.extname(filePath).toLowerCase())
+    )
     const chosenFile =
-      matchingByReqExt.length > 0
-        ? matchingByReqExt[0]
-        : matchingSupported.length > 0
-          ? matchingSupported[0]
-          : extractedFiles[0]
+      matchingByReqExt[0] || matchingSupported[0] || extractedFiles[0]
 
-    return this.normalizeN64RomInPlace(chosenFile)
+    return this.normalizeN64Rom(chosenFile, gameVaultSubdir)
   }
 
   /**
    * Checks if an N64 ROM file is byte-swapped (.v64, 0x37804012) or little-endian (.n64, 0x40123780)
-   * and automatically converts it in-place to canonical Big-Endian (.z64, 0x80371240).
-   * This guarantees that SHA-1 verification matches canonical databases and prevents recompiler crashes.
+   * and creates a canonical Big-Endian copy without modifying the user's source file.
    */
-  public normalizeN64RomInPlace(filePath: string): string {
+  private normalizeN64Rom(filePath: string, destinationDir: string): string {
     try {
       if (!fs.existsSync(filePath)) return filePath
       const stat = fs.statSync(filePath)
@@ -333,18 +355,14 @@ export class RomVaultService {
           }
         }
 
-        const dir = path.dirname(filePath)
         const baseWithoutExt = path.basename(filePath, path.extname(filePath))
-        const newZ64Path = path.join(dir, `${baseWithoutExt}.z64`)
+        const newZ64Path = path.join(
+          destinationDir,
+          `${baseWithoutExt}.normalized.z64`
+        )
 
+        fs.mkdirSync(destinationDir, { recursive: true })
         fs.writeFileSync(newZ64Path, swapped)
-        if (path.resolve(newZ64Path) !== path.resolve(filePath)) {
-          try {
-            fs.unlinkSync(filePath)
-          } catch {
-            // Ignore unlink
-          }
-        }
         return newZ64Path
       }
     } catch {

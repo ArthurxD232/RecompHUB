@@ -85,6 +85,12 @@ export function App(): React.ReactElement {
       }
     })
 
+    const unsubCatalog = window.api.onCatalogUpdated((result) => {
+      setCatalog(result.games)
+      setCatalogSource(result.source)
+      setLastUpdated(result.lastUpdated)
+    })
+
     const unsubLib = window.api.onLibraryUpdated((updatedLib) => {
       setLibrary(updatedLib)
     })
@@ -95,6 +101,7 @@ export function App(): React.ReactElement {
 
     return () => {
       unsubDl()
+      unsubCatalog()
       unsubLib()
       unsubScan()
     }
@@ -414,7 +421,7 @@ export function App(): React.ReactElement {
 
         <div className="flex items-center gap-4 uppercase tracking-wider text-[10px]">
           <button
-            onClick={() => window.api.openExternal('https://portsdr.com/')}
+            onClick={() => window.api.openExternalUrl('https://portsdr.com/')}
             className="hover:text-[#67c1f5] flex items-center gap-1 transition-colors"
             title="Catálogo alimentado por PortsDR.com (criado por TinSoldier97)"
           >
