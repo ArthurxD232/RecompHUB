@@ -3,6 +3,7 @@
 import * as cheerio from 'cheerio/slim'
 import {
   CatalogGame,
+  CatalogResult,
   GameRecipe,
   GitHubAsset,
   OSPlatform,
@@ -354,50 +355,74 @@ export class CatalogService {
   }
 
   private hasSyncedLiveThisSession = false
+  private refreshPromise: Promise<CatalogResult> | null = null
+  private updateListeners: ((result: CatalogResult) => void)[] = []
 
-  public async getCatalog(forceRefresh = false): Promise<{
-    games: CatalogGame[]
-    lastUpdated: string
-    source: 'live' | 'cache' | 'fallback'
-  }> {
+  public onUpdated(callback: (result: CatalogResult) => void): () => void {
+    this.updateListeners.push(callback)
+    return () => {
+      this.updateListeners = this.updateListeners.filter(
+        (listener) => listener !== callback
+      )
+    }
+  }
+
+  public async getCatalog(forceRefresh = false): Promise<CatalogResult> {
+    if (forceRefresh) {
+      return this.refreshCatalog()
+    }
+
     const cached = this.store.getCatalogCache()
-    const cacheAgeMs = cached.lastUpdated
-      ? Date.now() - new Date(cached.lastUpdated).getTime()
-      : Number.POSITIVE_INFINITY
-    const isCacheStale = cacheAgeMs > 15 * 60 * 1000 // 15 minutes
+    if (!this.hasSyncedLiveThisSession && !this.refreshPromise) {
+      void this.refreshCatalog()
+    }
 
-    // Sync live with portsdr.com on first startup of session, when cache is stale, or when user clicks Refresh
-    if (
-      !forceRefresh &&
-      this.hasSyncedLiveThisSession &&
-      !isCacheStale &&
-      cached.games.length > 0
-    ) {
-      const hydrated = cached.games.map((g) => this.attachRecipeInfo(g))
+    if (cached.games.length > 0) {
       return {
-        games: hydrated,
+        games: cached.games.map((game) => this.attachRecipeInfo(game)),
         lastUpdated: cached.lastUpdated,
         source: 'cache'
       }
     }
 
+    return {
+      games: this.getFallbackCatalog(),
+      lastUpdated: '',
+      source: 'fallback'
+    }
+  }
+
+  private refreshCatalog(): Promise<CatalogResult> {
+    if (this.refreshPromise) return this.refreshPromise
+
+    this.refreshPromise = this.fetchLiveCatalog()
+    return this.refreshPromise.finally(() => {
+      this.hasSyncedLiveThisSession = true
+      this.refreshPromise = null
+    })
+  }
+
+  private async fetchLiveCatalog(): Promise<CatalogResult> {
+    const cached = this.store.getCatalogCache()
     try {
       const scrapedGames = await this.scrapePortsDR()
       if (scrapedGames.length > 0) {
-        this.hasSyncedLiveThisSession = true
         this.store.setCatalogCache(scrapedGames)
-        return {
+        const result: CatalogResult = {
           games: scrapedGames,
           lastUpdated: new Date().toISOString(),
           source: 'live'
         }
+        for (const listener of this.updateListeners) {
+          listener(result)
+        }
+        return result
       }
     } catch (err) {
       console.warn('[CatalogService] Error scraping portsdr.com, checking cache/fallback:', err)
     }
 
     if (cached.games.length > 0) {
-      this.hasSyncedLiveThisSession = true
       return {
         games: cached.games.map((g) => this.attachRecipeInfo(g)),
         lastUpdated: cached.lastUpdated,
@@ -407,11 +432,15 @@ export class CatalogService {
 
     const fallback = this.getFallbackCatalog()
     this.store.setCatalogCache(fallback)
-    return {
+    const result: CatalogResult = {
       games: fallback,
       lastUpdated: new Date().toISOString(),
       source: 'fallback'
     }
+    for (const listener of this.updateListeners) {
+      listener(result)
+    }
+    return result
   }
 
   private attachRecipeInfo(game: CatalogGame): CatalogGame {
@@ -433,17 +462,26 @@ export class CatalogService {
   }
 
   public async scrapePortsDR(): Promise<CatalogGame[]> {
-    const response = await fetch('https://portsdr.com/', {
-      headers: {
-        'User-Agent': 'RecompHub-Launcher/1.0 (https://portsdr.com)'
-      }
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+    let html: string
+    try {
+      const response = await fetch('https://portsdr.com/', {
+        headers: {
+          'User-Agent': 'RecompHub-Launcher/1.0 (https://portsdr.com)'
+        },
+        signal: controller.signal
+      })
 
-    if (!response.ok) {
-      throw new Error(`PortsDR returned HTTP ${response.status}`)
+      if (!response.ok) {
+        throw new Error(`PortsDR returned HTTP ${response.status}`)
+      }
+
+      html = await response.text()
+    } finally {
+      clearTimeout(timeout)
     }
 
-    const html = await response.text()
     const $ = cheerio.load(html)
     const games: CatalogGame[] = []
     const seenIds = new Set<string>()

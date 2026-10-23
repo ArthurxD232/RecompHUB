@@ -9,6 +9,12 @@ export type RecipeFamily =
 
 export type ReleaseStatus = 'Latest' | 'Pre-release' | 'Source Only'
 
+export interface CatalogResult {
+  games: CatalogGame[]
+  lastUpdated: string
+  source: 'live' | 'cache' | 'fallback'
+}
+
 export interface RomRequirement {
   id: string
   label: string
@@ -93,6 +99,7 @@ export interface RomVaultEntry {
   filePath: string
   fileName: string
   size: number
+  fileModifiedAt?: number
   sha1: string
   md5: string
   extension: string
@@ -198,11 +205,8 @@ export interface RomAvailabilityStatus {
 
 export interface RecompHubAPI {
   // Catalog
-  getCatalog: (forceRefresh?: boolean) => Promise<{
-    games: CatalogGame[]
-    lastUpdated: string
-    source: 'live' | 'cache' | 'fallback'
-  }>
+  getCatalog: (forceRefresh?: boolean) => Promise<CatalogResult>
+  onCatalogUpdated: (callback: (result: CatalogResult) => void) => () => void
   resolveRelease: (gameId: string) => Promise<ResolvedReleaseInfo>
 
   // Local ROM/ISO Vault & Selection (supports raw ISO/ROM or .zip/.7z/.rar/.tar.gz)
