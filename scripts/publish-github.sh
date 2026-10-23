@@ -41,7 +41,9 @@ fi
 echo "==> Enviando código (branch main + tag ${TAG})..."
 cd "$ROOT"
 remote_url="https://x-access-token:${GITHUB_TOKEN}@github.com/${OWNER}/${REPO}.git"
-git push "$remote_url" main --tags
+git push "$remote_url" main
+# --force: se a tag já existir no GitHub (publicação anterior), ela é movida para o commit atual.
+git push --force "$remote_url" "refs/tags/${TAG}"
 git remote remove origin 2>/dev/null || true
 git remote add origin "https://github.com/${OWNER}/${REPO}.git"
 
@@ -61,17 +63,34 @@ if [[ -z "$release_id" ]]; then
 EOF
 )
   release_id=$(echo "$release_json" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+else
+  echo "==> Release já existe (id ${release_id}), atualizando notas..."
+  curl -sf "${auth[@]}" -X PATCH "${API}/repos/${OWNER}/${REPO}/releases/${release_id}" -d @- >/dev/null <<EOF
+{
+  "name": "${RELEASE_NAME}",
+  "body": ${body},
+  "prerelease": true
+}
+EOF
 fi
 
 echo "==> Enviando arquivos da release..."
+# Lista dos arquivos já anexados (nome<TAB>id), para substituir versões antigas.
+existing_assets=$(curl -sf "${auth[@]}" "${API}/repos/${OWNER}/${REPO}/releases/${release_id}/assets?per_page=100" \
+  | python3 -c 'import json,sys;[print(a["name"]+"\t"+str(a["id"])) for a in json.load(sys.stdin)]')
 for f in "$ROOT"/release/RecompHUB-beta-0.1-* "$ROOT"/release/SHA256SUMS.txt; do
   [[ -f "$f" ]] || continue
   name=$(basename "$f")
-  echo "    - ${name}"
+  old_id=$(printf '%s\n' "$existing_assets" | awk -F'\t' -v n="$name" '$1==n{print $2}')
+  if [[ -n "$old_id" ]]; then
+    echo "    - removendo versão antiga de ${name}"
+    curl -sf "${auth[@]}" -X DELETE "${API}/repos/${OWNER}/${REPO}/releases/assets/${old_id}" >/dev/null || true
+  fi
+  echo "    - enviando ${name}"
   curl -sf "${auth[@]}" -H "Content-Type: application/octet-stream" \
     --data-binary @"$f" \
     "https://uploads.github.com/repos/${OWNER}/${REPO}/releases/${release_id}/assets?name=${name}" >/dev/null \
-    || echo "      (falhou ou já existe)"
+    || echo "      (falhou ao enviar ${name})"
 done
 
 echo ""
