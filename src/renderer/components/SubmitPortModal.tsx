@@ -219,26 +219,40 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
             )}
 
             {inspectedData && (
-              <div className="p-3 bg-[#111c27] border border-[#233a52] rounded-[2px] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#67c1f5]">
-                    ✓ Dados Detectados do Repositório
-                  </span>
-                  <span className="font-mono text-[10px] text-[#8f98a0]">
-                    ⭐ {inspectedData.stars} estrelas • {inspectedData.hasReleases ? 'Releases disponíveis' : 'Sem releases públicas'}
-                  </span>
-                </div>
-                {inspectedData.latestTagName && (
-                  <div className="text-[11px] text-[#c7d5e0]">
-                    Última Release: <strong className="text-white font-mono">{inspectedData.latestTagName}</strong> ({inspectedData.assets.length} arquivos anexados)
-                  </div>
-                )}
-                {inspectedData.detectedPlatforms.length > 0 && (
-                  <div className="text-[10px] text-[#8f98a0] flex items-center gap-1.5">
-                    <span>Plataformas detectadas nos binários:</span>
-                    <span className="text-[#6cc034] font-semibold">
-                      {inspectedData.detectedPlatforms.join(', ')}
+              <div className="space-y-2">
+                <div className="p-3 bg-[#111c27] border border-[#233a52] rounded-[2px] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#67c1f5]">
+                      ✓ Dados Detectados do Repositório
                     </span>
+                    <span className="font-mono text-[10px] text-[#8f98a0]">
+                      ⭐ {inspectedData.stars} estrelas • {inspectedData.hasReleases ? 'Releases disponíveis' : 'Sem releases públicas'}
+                    </span>
+                  </div>
+                  {inspectedData.latestTagName && (
+                    <div className="text-[11px] text-[#c7d5e0]">
+                      Última Release: <strong className="text-white font-mono">{inspectedData.latestTagName}</strong> ({inspectedData.assets.length} arquivos anexados)
+                    </div>
+                  )}
+                  {inspectedData.detectedPlatforms.length > 0 && (
+                    <div className="text-[10px] text-[#8f98a0] flex items-center gap-1.5">
+                      <span>Plataformas detectadas nos binários:</span>
+                      <span className="text-[#6cc034] font-semibold">
+                        {inspectedData.detectedPlatforms.join(', ')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {!inspectedData.hasReleases && (
+                  <div className="p-3 bg-[#241a12] border border-[#6b4718] rounded-[2px] text-xs text-[#ffc875] flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-[#e5a93c] shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-[#ffc875]">Aviso: Repositório sem releases públicas</div>
+                      <p className="text-[11px] text-[#decab0] leading-relaxed">
+                        Este projeto no GitHub ainda não publicou arquivos executáveis (.zip / .exe) na aba Releases. Você ainda pode enviar a sugestão para a comunidade, mas para o jogo ser instalado com 1 clique no RecompHUB, os desenvolvedores precisarão criar uma Release no GitHub.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>

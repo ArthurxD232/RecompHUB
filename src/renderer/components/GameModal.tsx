@@ -19,7 +19,9 @@ import {
   X,
   Layers,
   Cpu,
-  Sparkles
+  Sparkles,
+  Gamepad2,
+  AlertCircle
 } from 'lucide-react'
 import {
   CatalogGame,
@@ -141,6 +143,7 @@ export const GameModal: React.FC<GameModalProps> = ({
   const [releaseInfo, setReleaseInfo] = useState<ResolvedReleaseInfo | null>(null)
   const [releaseLoading, setReleaseLoading] = useState(false)
   const [releaseError, setReleaseError] = useState<string | null>(null)
+  const [imgError, setImgError] = useState(false)
 
   const [romStatus, setRomStatus] = useState<RomAvailabilityStatus | null>(null)
   const [romLoading, setRomLoading] = useState(false)
@@ -164,6 +167,7 @@ export const GameModal: React.FC<GameModalProps> = ({
     setReleaseLoading(true)
     setRomLoading(true)
     setReleaseError(null)
+    setImgError(false)
 
     window.api
       .checkRomAvailability(targetId)
@@ -293,10 +297,11 @@ export const GameModal: React.FC<GameModalProps> = ({
     <div className="min-h-full steam-main-gradient text-[#dcdedf] flex flex-col">
       {/* 1. Steam Hero Artwork Header */}
       <div className="relative h-56 w-full bg-[#0e141c] overflow-hidden border-b border-[#283444] shrink-0">
-        {activeGame.imageUrl && (
+        {activeGame.imageUrl && !imgError && (
           <img
             src={activeGame.imageUrl}
             alt=""
+            onError={() => setImgError(true)}
             className="absolute inset-0 w-full h-full object-cover blur-xl opacity-30 scale-110 pointer-events-none"
           />
         )}
@@ -316,16 +321,20 @@ export const GameModal: React.FC<GameModalProps> = ({
         {/* Game Title & Poster Overlay */}
         <div className="absolute bottom-4 left-6 right-6 z-10 flex items-end gap-5">
           <div className="w-24 h-24 rounded-[3px] bg-[#12171e] border border-[#37495e] shadow-xl overflow-hidden shrink-0 flex items-center justify-center">
-            {activeGame.imageUrl ? (
+            {activeGame.imageUrl && !imgError ? (
               <img
                 src={activeGame.imageUrl}
                 alt={activeGame.title}
+                onError={() => setImgError(true)}
                 className="w-full h-full object-cover"
               />
             ) : (
-              <span className="text-base font-bold text-[#67c1f5]">
-                {activeGame.consoleBadge}
-              </span>
+              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#1a2330] to-[#121820] text-[#67c1f5]">
+                <Gamepad2 className="w-8 h-8 mb-1 opacity-70" />
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#96a6b8]">
+                  {activeGame.consoleBadge}
+                </span>
+              </div>
             )}
           </div>
 
@@ -362,7 +371,7 @@ export const GameModal: React.FC<GameModalProps> = ({
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded-[2px] bg-[#1a9fff]/20 border border-[#1a9fff]/40 text-[#67c1f5] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5" />
-                VERSÕES &amp; PORTS DA COMUNIDADE ({ports.length})
+                VERSÕES &amp; PORTS DISPONÍVEIS NO GITHUB ({ports.length})
               </span>
               <span className="text-[11px] text-[#8f98a0]">
                 Clique no port que você deseja selecionar para jogar ou instalar:
@@ -490,16 +499,18 @@ export const GameModal: React.FC<GameModalProps> = ({
           ) : (
             <button
               onClick={handleInstallClick}
-              disabled={actionBusy || isDownloading}
+              disabled={actionBusy || isDownloading || Boolean(releaseError)}
               className="steam-btn-blue px-8 py-2.5 rounded-[2px] text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow-md disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
               <span>
                 {isDownloading
                   ? `${activeDownloadTask?.stage === 'EXTRACTING_ISO' ? 'DESCOMPACTANDO ISO' : 'INSTALANDO'} (${activeDownloadTask?.overallProgress ?? 0}%)`
-                  : romStatus?.ready
-                    ? 'INSTALAR'
-                    : 'ESCOLHER ISO E INSTALAR'}
+                  : releaseError
+                    ? 'RELEASE INDISPONÍVEL NO GITHUB'
+                    : romStatus?.ready
+                      ? 'INSTALAR'
+                      : 'ESCOLHER ISO E INSTALAR'}
               </span>
             </button>
           )}
@@ -919,7 +930,23 @@ export const GameModal: React.FC<GameModalProps> = ({
                 Consultando última release no GitHub...
               </p>
             ) : releaseError ? (
-              <p className="text-xs text-[#e5a93c]">{releaseError}</p>
+              <div className="space-y-2 p-3 bg-[#241a12] border border-[#6b4718] rounded-[2px]">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[#ffc875]">
+                  <AlertCircle className="w-4 h-4 text-[#ffc875] shrink-0" />
+                  <span>Releases não encontradas no GitHub</span>
+                </div>
+                <p className="text-[11px] text-[#decab0] leading-relaxed">
+                  Este repositório ainda não possui arquivos executáveis (.zip / .exe / .AppImage) publicados na aba Releases pelos autores no GitHub.
+                </p>
+                <a
+                  href={activeGame.githubUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] text-[#67c1f5] hover:underline pt-0.5"
+                >
+                  Abrir repositório no GitHub <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
             ) : releaseInfo ? (
               <div className="space-y-2.5 text-xs">
                 <div>

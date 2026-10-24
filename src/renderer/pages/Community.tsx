@@ -125,7 +125,7 @@ export const Community: React.FC<CommunityProps> = ({
             </h1>
 
             <p className="text-xs text-[#9eb5ce] max-w-2xl leading-relaxed">
-              Descubra novos ports criados e indicados pelos jogadores. Qualquer membro da comunidade pode submeter um link do GitHub de um port; após a nossa aprovação, o port é disponibilizado automaticamente para todos os usuários do RecompHUB.
+              Ports do GitHub sugeridos pela comunidade para incluir jogos que ainda não estão no catálogo do PortsDR. Qualquer pessoa pode indicar o link do GitHub de um novo port; após a nossa aprovação, o jogo entra automaticamente para todos os usuários do RecompHUB.
             </p>
           </div>
 

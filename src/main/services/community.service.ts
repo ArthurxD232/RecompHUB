@@ -309,13 +309,15 @@ export class CommunityService {
     const id = `community__${payload.projectName.toLowerCase().replace(/[^a-z0-9_-]+/g, '-')}`
     const highlights = payload.highlights && payload.highlights.length > 0 ? payload.highlights : ['60 FPS', 'Widescreen Nativo']
 
+    const repoFullName = payload.githubUrl.replace(/^https?:\/\/github\.com\//i, '').replace(/\/$/, '')
     const communityDataObj: Partial<CommunityPort> = {
       id,
       title: payload.title.trim(),
       projectName: payload.projectName.trim(),
-      repoFullName: payload.githubUrl.replace(/^https?:\/\/github\.com\//i, '').replace(/\/$/, ''),
+      repoFullName,
       githubUrl: payload.githubUrl.trim(),
       releaseUrl: `${payload.githubUrl.trim().replace(/\/$/, '')}/releases/latest`,
+      imageUrl: `https://opengraph.githubassets.com/1/${repoFullName}`,
       console: payload.console,
       consoleBadge: payload.consoleBadge,
       version: 'Latest',
