@@ -8,6 +8,10 @@ Catálogo de jogos fornecido pelo **[PortsDR.com](https://portsdr.com/)**, criad
 
 ## ✨ O que tem nesta versão
 
+- 🌐 **Nova Aba Comunidade**: Descubra ports independentes criados por desenvolvedores da comunidade (ex: *Jak and Daxter OpenGOAL*, *Super Mario 64 PC Port*, *Sonic Mania Decompilation*, *Rayman 2 PC* e muito mais).
+- 🤝 **Submissão Direta de Novos Ports**: Qualquer pessoa pode colar o link do repositório no GitHub. O RecompHUB inspeciona o repositório automaticamente, detecta plataformas suportadas, releases e assets, e gera a proposta para aprovação dos mantenedores.
+- ⚡ **Aprovação Automática GitOps (GitHub Actions)**: Quando um mantenedor adiciona a label `approved` na Issue, a Action insere o port no catálogo oficial sem necessidade de deploy de servidor.
+- 🔄 **Sincronização em Tempo Real**: Usuários existentes recebem ports aprovados instantaneamente na aba Comunidade sem precisar reinstalar o aplicativo.
 - 📚 **Catálogo automático** puxado do PortsDR.com (jogos novos aparecem sozinhos)
 - 🗂️ **Agrupamento de múltiplos ports**: Jogos repetidos (como *Majora's Mask*, *Banjo-Kazooie*, *Crash Team Racing*, *GoldenEye 007*) agora ficam juntos em um único card limpo com seletor de versões
 - 🔍 **Comparativo & Tecnologias dos Ports**: Mostra visualmente o que cada port é, como foi feito (Recompilação Estática via N64Recomp/XenonRecomp/PSXRecomp vs Descompilação & libultraship vs Nativo) e seus pontos fortes (144+ FPS, Ray Tracing RT64, Mods, etc.)
