@@ -53,6 +53,34 @@ export interface GameRecipe {
   notes?: string
 }
 
+export interface GamePortInfo {
+  id: string
+  title: string
+  projectName: string
+  repoFullName: string
+  releaseRepoFullName?: string
+  githubUrl: string
+  releaseUrl?: string
+  websiteUrl?: string
+  imageUrl?: string
+  console: string
+  consoleBadge: string
+  version: string
+  releaseStatus: ReleaseStatus
+  isAiAssisted: boolean
+  platforms: OSPlatform[]
+  updatedAt: string
+  recipe?: GameRecipe
+  inferredFamily: RecipeFamily
+
+  // Explanatory and comparison metadata
+  toolchainType: string
+  howItWorks: string
+  description: string
+  highlights: string[]
+  differences?: string
+}
+
 export interface CatalogGame {
   id: string
   title: string
@@ -72,6 +100,16 @@ export interface CatalogGame {
   updatedAt: string
   recipe?: GameRecipe
   inferredFamily: RecipeFamily
+
+  // Multi-port canonical group properties
+  canonicalId?: string
+  ports?: GamePortInfo[]
+  selectedPortId?: string
+  toolchainType?: string
+  howItWorks?: string
+  description?: string
+  highlights?: string[]
+  differences?: string
 }
 
 export interface GitHubAsset {

@@ -83,8 +83,11 @@ export const Catalog: React.FC<CatalogProps> = ({
       }
 
       if (q) {
+        const portsKeywords = g.ports
+          ? g.ports.map((p) => `${p.projectName} ${p.repoFullName}`).join(' ')
+          : ''
         const hay =
-          `${g.title} ${g.projectName} ${g.repoFullName} ${g.console} ${g.consoleBadge}`.toLowerCase()
+          `${g.title} ${g.projectName} ${g.repoFullName} ${g.console} ${g.consoleBadge} ${portsKeywords}`.toLowerCase()
         if (!hay.includes(q)) return false
       }
 
@@ -220,8 +223,12 @@ export const Catalog: React.FC<CatalogProps> = ({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5">
             {filteredGames.map((game) => {
-              const inst = installedByGameId.get(game.id)
-              const dl = activeDownloadByGameId.get(game.id)
+              const inst =
+                installedByGameId.get(game.id) ||
+                game.ports?.map((p) => installedByGameId.get(p.id)).find(Boolean)
+              const dl =
+                activeDownloadByGameId.get(game.id) ||
+                game.ports?.map((p) => activeDownloadByGameId.get(p.id)).find(Boolean)
               return (
                 <GameCard
                   key={game.id}

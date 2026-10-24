@@ -16,7 +16,10 @@ import {
   Settings2,
   Maximize2,
   Minimize2,
-  X
+  X,
+  Layers,
+  Cpu,
+  Sparkles
 } from 'lucide-react'
 import {
   CatalogGame,
@@ -31,6 +34,8 @@ import {
 interface GameModalProps {
   game: CatalogGame
   installed?: InstalledGame
+  library?: InstalledGame[]
+  downloads?: DownloadTaskProgress[]
   activeDownload?: DownloadTaskProgress
   lastDownloadTask?: DownloadTaskProgress
   onClose: () => void
@@ -67,6 +72,8 @@ function formatPlayTime(seconds?: number): string {
 export const GameModal: React.FC<GameModalProps> = ({
   game,
   installed,
+  library,
+  downloads,
   activeDownload,
   lastDownloadTask,
   onClose,
@@ -78,6 +85,59 @@ export const GameModal: React.FC<GameModalProps> = ({
   onRomImported,
   onOpenDownloads
 }) => {
+  const ports = game.ports && game.ports.length > 0 ? game.ports : []
+  const [selectedPortId, setSelectedPortId] = useState<string>(
+    game.selectedPortId || (ports.length > 0 ? ports[0].id : game.id)
+  )
+
+  useEffect(() => {
+    setSelectedPortId(
+      game.selectedPortId || (game.ports && game.ports.length > 0 ? game.ports[0].id : game.id)
+    )
+  }, [game.id, game.selectedPortId])
+
+  const currentPort = ports.find((p) => p.id === selectedPortId) || ports[0]
+  const activeGame: CatalogGame = currentPort
+    ? {
+        ...game,
+        ...currentPort,
+        id: currentPort.id,
+        projectName: currentPort.projectName,
+        repoFullName: currentPort.repoFullName,
+        releaseRepoFullName: currentPort.releaseRepoFullName,
+        githubUrl: currentPort.githubUrl,
+        releaseUrl: currentPort.releaseUrl,
+        websiteUrl: currentPort.websiteUrl,
+        imageUrl: currentPort.imageUrl || game.imageUrl,
+        version: currentPort.version,
+        releaseStatus: currentPort.releaseStatus,
+        platforms: currentPort.platforms,
+        recipe: currentPort.recipe || game.recipe,
+        inferredFamily: currentPort.inferredFamily,
+        toolchainType: currentPort.toolchainType,
+        howItWorks: currentPort.howItWorks,
+        description: currentPort.description,
+        highlights: currentPort.highlights,
+        differences: currentPort.differences
+      }
+    : game
+
+  const activeInstalled =
+    library?.find((i) => i.gameId === activeGame.id) ||
+    (activeGame.id === game.id ? installed : undefined)
+
+  const activeDownloadTask =
+    downloads?.slice().reverse().find(
+      (d) =>
+        d.gameId === activeGame.id &&
+        !['READY_TO_PLAY', 'NEEDS_ROM', 'ERROR'].includes(d.stage)
+    ) ||
+    (activeGame.id === game.id ? activeDownload : undefined)
+
+  const activeLastTask =
+    downloads?.slice().reverse().find((d) => d.gameId === activeGame.id) ||
+    (activeGame.id === game.id ? lastDownloadTask : undefined)
+
   const [releaseInfo, setReleaseInfo] = useState<ResolvedReleaseInfo | null>(null)
   const [releaseLoading, setReleaseLoading] = useState(false)
   const [releaseError, setReleaseError] = useState<string | null>(null)
@@ -93,54 +153,53 @@ export const GameModal: React.FC<GameModalProps> = ({
 
   const refreshRomStatus = async (): Promise<void> => {
     try {
-      const res = await window.api.checkRomAvailability(game.id)
+      const res = await window.api.checkRomAvailability(activeGame.id)
       setRomStatus(res)
     } catch {
       // Ignore
     }
   }
 
-  const loadDetails = async (): Promise<void> => {
+  const loadDetails = async (targetId: string): Promise<void> => {
     setReleaseLoading(true)
     setRomLoading(true)
     setReleaseError(null)
 
     window.api
-      .checkRomAvailability(game.id)
+      .checkRomAvailability(targetId)
       .then((res) => setRomStatus(res))
       .catch(() => {})
       .finally(() => setRomLoading(false))
 
     window.api
-      .resolveRelease(game.id)
+      .resolveRelease(targetId)
       .then((res) => setReleaseInfo(res))
       .catch((err) => setReleaseError(err?.message || 'Erro ao consultar GitHub'))
       .finally(() => setReleaseLoading(false))
   }
 
   useEffect(() => {
-    loadDetails()
-  }, [game.id])
+    loadDetails(activeGame.id)
+  }, [activeGame.id])
 
   useEffect(() => {
     if (
-      lastDownloadTask &&
-      (lastDownloadTask.stage === 'READY_TO_PLAY' ||
-        lastDownloadTask.stage === 'NEEDS_ROM')
+      activeLastTask &&
+      (activeLastTask.stage === 'READY_TO_PLAY' ||
+        activeLastTask.stage === 'NEEDS_ROM')
     ) {
       refreshRomStatus()
     }
-  }, [lastDownloadTask?.stage, lastDownloadTask?.completedAt, installed?.romPaired])
+  }, [activeLastTask?.stage, activeLastTask?.completedAt, activeInstalled?.romPaired])
 
   const handleImportRom = async (reqId?: string): Promise<boolean> => {
     setLaunchError(null)
     try {
-      const pickedPath = await window.api.pickRomFileForGame(game.id, reqId)
+      const pickedPath = await window.api.pickRomFileForGame(activeGame.id, reqId)
       if (!pickedPath) return false
 
-      // Runs as a tracked task in DownloaderService (visible in DOWNLOADS and activeDownload)
       const entry = await window.api.importRomFileManually(
-        game.id,
+        activeGame.id,
         reqId,
         pickedPath
       )
@@ -170,13 +229,12 @@ export const GameModal: React.FC<GameModalProps> = ({
   const handleInstallClick = async (): Promise<void> => {
     setLaunchError(null)
     if (!romStatus?.ready) {
-      const pickedPath = await window.api.pickRomFileForGame(game.id)
+      const pickedPath = await window.api.pickRomFileForGame(activeGame.id)
       if (!pickedPath) return
-      // Start full pipeline (ISO extraction + Port download + Recipe) inside DownloaderService
-      onInstall(game, pickedPath)
+      onInstall(activeGame, pickedPath)
       return
     }
-    onInstall(game)
+    onInstall(activeGame)
   }
 
   const handleLaunchClick = async (): Promise<void> => {
@@ -192,26 +250,26 @@ export const GameModal: React.FC<GameModalProps> = ({
     }
 
     try {
-      await onLaunch(game.id)
+      await onLaunch(activeGame.id)
     } catch (err: any) {
       setLaunchError(err?.message || String(err))
     }
   }
 
   const handleToggleFullscreen = async (): Promise<void> => {
-    if (!installed) return
-    const nextVal = installed.launchFullscreen === false
-    await window.api.setGameFullscreen(game.id, nextVal)
+    if (!activeInstalled) return
+    const nextVal = activeInstalled.launchFullscreen === false
+    await window.api.setGameFullscreen(activeGame.id, nextVal)
   }
 
-  const recipe = game.recipe
+  const recipe = activeGame.recipe
   const requirements: RomRequirement[] =
     recipe && recipe.requirements.length > 0
       ? recipe.requirements
       : [
           {
-            id: `${game.id}_rom`,
-            label: `${game.title} — ISO / ROM Original`,
+            id: `${activeGame.id}_rom`,
+            label: `${activeGame.title} — ISO / ROM Original`,
             type: 'iso',
             expectedFilename: 'game.iso',
             extensions: ['.iso', '.bin', '.z64', '.n64', '.rom']
@@ -219,23 +277,25 @@ export const GameModal: React.FC<GameModalProps> = ({
         ]
 
   const isDownloading = Boolean(
-    activeDownload &&
-      !['READY_TO_PLAY', 'NEEDS_ROM', 'ERROR'].includes(activeDownload.stage)
+    activeDownloadTask &&
+      !['READY_TO_PLAY', 'NEEDS_ROM', 'ERROR'].includes(activeDownloadTask.stage)
   )
 
-  const isFullscreenEnabled = installed?.launchFullscreen !== false
+  const isFullscreenEnabled = activeInstalled?.launchFullscreen !== false
   const pairedLocalEntries =
     romStatus?.matchedRequirements
       .map((m) => m.localEntry)
       .filter((e): e is NonNullable<typeof e> => Boolean(e)) || []
 
+  const hasMultiPorts = ports.length > 1
+
   return (
     <div className="min-h-full steam-main-gradient text-[#dcdedf] flex flex-col">
       {/* 1. Steam Hero Artwork Header */}
       <div className="relative h-56 w-full bg-[#0e141c] overflow-hidden border-b border-[#283444] shrink-0">
-        {game.imageUrl && (
+        {activeGame.imageUrl && (
           <img
-            src={game.imageUrl}
+            src={activeGame.imageUrl}
             alt=""
             className="absolute inset-0 w-full h-full object-cover blur-xl opacity-30 scale-110 pointer-events-none"
           />
@@ -256,47 +316,160 @@ export const GameModal: React.FC<GameModalProps> = ({
         {/* Game Title & Poster Overlay */}
         <div className="absolute bottom-4 left-6 right-6 z-10 flex items-end gap-5">
           <div className="w-24 h-24 rounded-[3px] bg-[#12171e] border border-[#37495e] shadow-xl overflow-hidden shrink-0 flex items-center justify-center">
-            {game.imageUrl ? (
+            {activeGame.imageUrl ? (
               <img
-                src={game.imageUrl}
-                alt={game.title}
+                src={activeGame.imageUrl}
+                alt={activeGame.title}
                 className="w-full h-full object-cover"
               />
             ) : (
               <span className="text-base font-bold text-[#67c1f5]">
-                {game.consoleBadge}
+                {activeGame.consoleBadge}
               </span>
             )}
           </div>
 
           <div className="min-w-0 pb-0.5">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="px-2 py-0.5 bg-[#1a9fff]/20 border border-[#1a9fff]/40 text-[#67c1f5] text-[10px] font-bold uppercase tracking-wider rounded-[2px]">
-                {game.console}
+                {activeGame.console}
               </span>
               <span className="px-2 py-0.5 bg-[#232f3e] border border-[#35465c] text-[#96a6b8] text-[10px] font-mono uppercase rounded-[2px]">
-                {recipe?.family || game.inferredFamily}
+                {recipe?.family || activeGame.inferredFamily}
               </span>
+              {hasMultiPorts && (
+                <span className="px-2 py-0.5 bg-[#172e44] border border-[#1a9fff]/60 text-[#67c1f5] text-[10px] font-bold uppercase tracking-wider rounded-[2px] flex items-center gap-1">
+                  <Layers className="w-3 h-3 text-[#1a9fff]" />
+                  <span>{ports.length} PORTS DISPONÍVEIS</span>
+                </span>
+              )}
             </div>
             <h1 className="text-2xl font-bold text-white tracking-tight truncate drop-shadow">
               {game.title}
             </h1>
             <p className="text-xs text-[#8f98a0] mt-0.5">
-              Projeto: <strong className="text-[#c7d5e0]">{game.projectName}</strong> • Repositório:{' '}
-              <span className="font-mono text-[#67c1f5]">{game.repoFullName}</span>
+              Port Ativo: <strong className="text-[#c7d5e0]">{activeGame.projectName}</strong> • Repositório:{' '}
+              <span className="font-mono text-[#67c1f5]">{activeGame.repoFullName}</span>
             </p>
           </div>
         </div>
       </div>
 
+      {/* Multi-Port Selector Section (Shown when this game has > 1 port available) */}
+      {hasMultiPorts && (
+        <div className="bg-[#141d27] border-b border-[#253547] px-6 py-4 shadow-inner">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-[2px] bg-[#1a9fff]/20 border border-[#1a9fff]/40 text-[#67c1f5] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5" />
+                VERSÕES &amp; PORTS DA COMUNIDADE ({ports.length})
+              </span>
+              <span className="text-[11px] text-[#8f98a0]">
+                Clique no port que você deseja selecionar para jogar ou instalar:
+              </span>
+            </div>
+          </div>
+
+          {/* Grid of Available Ports */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {ports.map((port) => {
+              const isSelected = port.id === activeGame.id
+              const portInstData = library?.find((i) => i.gameId === port.id)
+              const isPortInstalled = Boolean(portInstData)
+              const isRunning = portInstData?.status === 'RUNNING'
+
+              return (
+                <div
+                  key={port.id}
+                  onClick={() => setSelectedPortId(port.id)}
+                  className={`p-3.5 rounded-[3px] border cursor-pointer transition-all duration-150 flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-[#1b2b3d] border-[#1a9fff] shadow-[0_0_14px_rgba(26,159,255,0.25)] ring-1 ring-[#1a9fff]/60'
+                      : 'bg-[#16202c] hover:bg-[#1a2634] border-[#26374a] hover:border-[#3d5775]'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3
+                            className={`text-[13px] font-bold truncate ${
+                              isSelected ? 'text-white' : 'text-[#c7d5e0]'
+                            }`}
+                          >
+                            {port.projectName}
+                          </h3>
+                          {isPortInstalled && (
+                            <span
+                              className={`px-1.5 py-0.2 rounded-[2px] text-[9px] font-bold uppercase ${
+                                isRunning
+                                  ? 'bg-[#5c7e10] text-white animate-pulse'
+                                  : 'bg-[#2b4c1c] text-[#a3e635] border border-[#3b6b25]'
+                              }`}
+                            >
+                              {isRunning ? 'Rodando' : 'Instalado'}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-mono text-[#67c1f5] truncate block mt-0.5">
+                          {port.repoFullName}
+                        </span>
+                      </div>
+
+                      <div className="shrink-0">
+                        <span
+                          className={`px-2 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider ${
+                            isSelected
+                              ? 'bg-[#1a9fff] text-white shadow-sm'
+                              : 'bg-[#212f3f] text-[#8f98a0] border border-[#2f4258]'
+                          }`}
+                        >
+                          {isSelected ? '✓ Selecionado' : 'Selecionar'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Toolchain Badge */}
+                    <div className="mb-2">
+                      <span className="inline-block px-1.5 py-0.5 rounded-[2px] bg-[#111720] border border-[#233345] text-[#8fa7c0] text-[10px] font-semibold">
+                        {port.toolchainType}
+                      </span>
+                    </div>
+
+                    {/* Short Description */}
+                    <p className="text-xs text-[#9eb0c2] leading-relaxed line-clamp-2 mb-2">
+                      {port.description}
+                    </p>
+                  </div>
+
+                  {/* Highlights pills */}
+                  {port.highlights && port.highlights.length > 0 && (
+                    <div className="pt-2 border-t border-[#233345] flex flex-wrap gap-1">
+                      {port.highlights.slice(0, 3).map((hl, idx) => (
+                        <span
+                          key={idx}
+                          className="px-1.5 py-0.2 rounded-[2px] bg-[#111822] text-[#67c1f5] text-[9.5px]"
+                        >
+                          • {hl}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 2. Iconic Steam Play / Install Action Bar */}
       <div className="bg-[#1e2833] border-b border-[#2c3b4b] px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 shadow-md">
         <div className="flex flex-wrap items-center gap-6">
           {/* Primary Play / Install / Stop Button */}
-          {installed ? (
-            installed.status === 'RUNNING' ? (
+          {activeInstalled ? (
+            activeInstalled.status === 'RUNNING' ? (
               <button
-                onClick={() => onStop(game.id)}
+                onClick={() => onStop(activeGame.id)}
                 className="px-8 py-2.5 rounded-[2px] bg-[#c93838] hover:bg-[#e04343] text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow"
               >
                 <Square className="w-4 h-4 fill-current" />
@@ -323,7 +496,7 @@ export const GameModal: React.FC<GameModalProps> = ({
               <Download className="w-4 h-4" />
               <span>
                 {isDownloading
-                  ? `${activeDownload?.stage === 'EXTRACTING_ISO' ? 'DESCOMPACTANDO ISO' : 'INSTALANDO'} (${activeDownload?.overallProgress ?? 0}%)`
+                  ? `${activeDownloadTask?.stage === 'EXTRACTING_ISO' ? 'DESCOMPACTANDO ISO' : 'INSTALANDO'} (${activeDownloadTask?.overallProgress ?? 0}%)`
                   : romStatus?.ready
                     ? 'INSTALAR'
                     : 'ESCOLHER ISO E INSTALAR'}
@@ -368,7 +541,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                 TEMPO DE JOGO
               </div>
               <div className="text-[#c7d5e0] font-medium mt-0.5">
-                {formatPlayTime(installed?.playTimeSeconds)}
+                {formatPlayTime(activeInstalled?.playTimeSeconds)}
               </div>
             </div>
 
@@ -377,7 +550,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                 EXECUÇÃO
               </div>
               <div className="text-[#c7d5e0] font-medium mt-0.5">
-                {installed?.requiresCompatibilityLayer ||
+                {activeInstalled?.requiresCompatibilityLayer ||
                 releaseInfo?.requiresCompatibilityLayer
                   ? 'Proton / umu-run'
                   : 'Nativo'}
@@ -388,7 +561,7 @@ export const GameModal: React.FC<GameModalProps> = ({
 
         {/* Right Utility Icons (Steam Gear / Folder / Reapply / Delete) */}
         <div className="flex items-center gap-1.5">
-          {installed && (
+          {activeInstalled && (
             <button
               onClick={handleToggleFullscreen}
               title="Alternar entre Iniciar em Tela Cheia (Borderless) ou Modo Janela"
@@ -417,10 +590,10 @@ export const GameModal: React.FC<GameModalProps> = ({
             <span>Definir ISO / ROM</span>
           </button>
 
-          {installed && (
+          {activeInstalled && (
             <>
               <button
-                onClick={() => window.api.openGameFolder(game.id)}
+                onClick={() => window.api.openGameFolder(activeGame.id)}
                 title="Explorar arquivos locais instalados"
                 className="p-2 rounded-[2px] bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#c7d5e0]"
               >
@@ -431,9 +604,9 @@ export const GameModal: React.FC<GameModalProps> = ({
                 onClick={async () => {
                   setActionBusy(true)
                   try {
-                    await onReapplyRecipe(game.id)
+                    await onReapplyRecipe(activeGame.id)
                     const updatedRom = await window.api.checkRomAvailability(
-                      game.id
+                      activeGame.id
                     )
                     setRomStatus(updatedRom)
                   } finally {
@@ -450,7 +623,7 @@ export const GameModal: React.FC<GameModalProps> = ({
               </button>
 
               <button
-                onClick={() => window.api.selectExecutableManually(game.id)}
+                onClick={() => window.api.selectExecutableManually(activeGame.id)}
                 title="Selecionar executável manualmente"
                 className="p-2 rounded-[2px] bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#c7d5e0]"
               >
@@ -474,11 +647,11 @@ export const GameModal: React.FC<GameModalProps> = ({
       </div>
 
       {/* Active Download Progress Bar */}
-      {isDownloading && activeDownload && (
+      {isDownloading && activeDownloadTask && (
         <div className="bg-[#142230] border-b border-[#264663] px-6 py-3">
           <div className="flex items-center justify-between text-xs mb-1.5 gap-4">
             <span className="font-bold uppercase tracking-wider text-[#67c1f5] truncate">
-              {activeDownload.stageLabel}
+              {activeDownloadTask.stageLabel}
             </span>
             <div className="flex items-center gap-3 shrink-0">
               {onOpenDownloads && (
@@ -490,14 +663,14 @@ export const GameModal: React.FC<GameModalProps> = ({
                 </button>
               )}
               <span className="font-mono font-bold text-white">
-                {activeDownload.overallProgress}%
+                {activeDownloadTask.overallProgress}%
               </span>
             </div>
           </div>
           <div className="w-full h-2 bg-[#0d151d] rounded-[1px] overflow-hidden">
             <div
               className="h-full bg-[#1a9fff] transition-all duration-200"
-              style={{ width: `${activeDownload.overallProgress}%` }}
+              style={{ width: `${activeDownloadTask.overallProgress}%` }}
             />
           </div>
         </div>
@@ -505,10 +678,10 @@ export const GameModal: React.FC<GameModalProps> = ({
 
       {/* Alerts */}
       <div className="px-6 pt-4 space-y-3">
-        {(launchError || lastDownloadTask?.stage === 'ERROR') && (
+        {(launchError || activeLastTask?.stage === 'ERROR') && (
           <div className="p-3 rounded-[2px] bg-[#4c1d1d] border border-[#8c3232] text-xs text-red-100 flex items-center gap-2.5">
             <AlertTriangle className="w-4 h-4 text-red-300 shrink-0" />
-            <span>{launchError || lastDownloadTask?.error}</span>
+            <span>{launchError || activeLastTask?.error}</span>
           </div>
         )}
 
@@ -522,8 +695,72 @@ export const GameModal: React.FC<GameModalProps> = ({
 
       {/* 3. Main Two-Column Steam Page Content */}
       <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
-        {/* Left 2 Columns: ISO/ROM Configuration & Recipe Logs */}
+        {/* Left 2 Columns: Port Details, ISO/ROM Configuration & Recipe Logs */}
         <div className="lg:col-span-2 space-y-5">
+          {/* Detailed Port Explanation & Differences Card */}
+          <div className="bg-[#161f29] border border-[#263545] rounded-[3px] p-4 space-y-3.5 shadow-sm">
+            <div className="flex items-center justify-between border-b border-[#253342] pb-2.5">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-2">
+                <Cpu className="w-4 h-4" />
+                SOBRE ESTE PORT: {activeGame.projectName}
+              </h2>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#111720] border border-[#243447] text-[#8fa7c0]">
+                {activeGame.toolchainType}
+              </span>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#67707b] block mb-0.5">
+                  O QUE É
+                </span>
+                <p className="text-[#c7d5e0] leading-relaxed">
+                  {activeGame.description}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#67707b] block mb-0.5">
+                  COMO É FEITO (ARQUITETURA &amp; MÉTODO)
+                </span>
+                <p className="text-[#96a0aa] leading-relaxed">
+                  {activeGame.howItWorks}
+                </p>
+              </div>
+
+              {activeGame.differences && (
+                <div className="p-3 rounded-[2px] bg-[#121c27] border border-[#1e3248] space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#1a9fff]" />
+                    DIFERENÇAS &amp; PONTOS FORTES DESTE PORT
+                  </span>
+                  <p className="text-[#c7d5e0] leading-relaxed">
+                    {activeGame.differences}
+                  </p>
+                </div>
+              )}
+
+              {activeGame.highlights && activeGame.highlights.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#67707b] block mb-1.5">
+                    DESTAQUES &amp; RECURSOS PRINCIPAIS
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {activeGame.highlights.map((hl, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 text-[#dcdedf] bg-[#111720] px-3 py-2 rounded-[2px] border border-[#202c3b]"
+                      >
+                        <span className="text-[#1a9fff] font-bold">✓</span>
+                        <span className="text-[11.5px] leading-tight">{hl}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* ISO / ROM Path Configuration Box */}
           <div className="bg-[#161f29] border border-[#263545] rounded-[3px] p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-[#253342] pb-2.5">
@@ -638,7 +875,7 @@ export const GameModal: React.FC<GameModalProps> = ({
           {/* Recipe & Post-Install Log Box */}
           <div className="bg-[#161f29] border border-[#263545] rounded-[3px] p-4 space-y-3">
             <h2 className="text-xs font-bold uppercase tracking-wider text-[#67c1f5] border-b border-[#253342] pb-2">
-              AUTOMAÇÃO DE RECEITA ({recipe?.family || game.inferredFamily})
+              AUTOMAÇÃO DE RECEITA ({recipe?.family || activeGame.inferredFamily})
             </h2>
             <p className="text-xs text-[#c7d5e0] leading-relaxed">
               {recipe?.notes}
@@ -660,9 +897,9 @@ export const GameModal: React.FC<GameModalProps> = ({
               (nos ports PS2/N64 compatíveis) para abrir o menu gráfico interno.
             </div>
 
-            {installed && installed.recipeLogs.length > 0 && (
+            {activeInstalled && activeInstalled.recipeLogs.length > 0 && (
               <div className="p-3 bg-[#0e141b] border border-[#223040] rounded-[2px] font-mono text-[11px] text-[#8f98a0] max-h-44 overflow-y-auto space-y-1">
-                {installed.recipeLogs.map((line, idx) => (
+                {activeInstalled.recipeLogs.map((line, idx) => (
                   <div key={idx}>{line}</div>
                 ))}
               </div>
@@ -716,16 +953,16 @@ export const GameModal: React.FC<GameModalProps> = ({
 
             <div className="pt-2 border-t border-[#253342] flex flex-col gap-1.5">
               <button
-                onClick={() => window.api.openExternalUrl(game.githubUrl)}
+                onClick={() => window.api.openExternalUrl(activeGame.githubUrl)}
                 className="w-full px-3 py-1.5 bg-[#212d3b] hover:bg-[#2c3c4f] text-[#67c1f5] text-xs font-medium rounded-[2px] flex items-center justify-between"
               >
                 <span>Ver Repositório no GitHub</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </button>
 
-              {game.websiteUrl && (
+              {activeGame.websiteUrl && (
                 <button
-                  onClick={() => window.api.openExternalUrl(game.websiteUrl!)}
+                  onClick={() => window.api.openExternalUrl(activeGame.websiteUrl!)}
                   className="w-full px-3 py-1.5 bg-[#212d3b] hover:bg-[#2c3c4f] text-[#67c1f5] text-xs font-medium rounded-[2px] flex items-center justify-between"
                 >
                   <span>Site Oficial do Projeto</span>
@@ -744,7 +981,7 @@ export const GameModal: React.FC<GameModalProps> = ({
             <div className="px-5 py-3.5 bg-[#171d25] border-b border-[#2a3846] flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white">
                 <Trash2 className="w-4 h-4 text-red-400" />
-                <span>DESINSTALAR — {game.title}</span>
+                <span>DESINSTALAR — {activeGame.title} ({activeGame.projectName})</span>
               </div>
               <button
                 onClick={() => setShowUninstallModal(false)}
@@ -757,7 +994,7 @@ export const GameModal: React.FC<GameModalProps> = ({
             <div className="p-5 space-y-4 text-xs text-[#c7d5e0]">
               <p className="leading-relaxed">
                 Você está prestes a remover a instalação de{' '}
-                <strong className="text-white">{game.title}</strong> do seu computador.
+                <strong className="text-white">{activeGame.title} ({activeGame.projectName})</strong> do seu computador.
               </p>
 
               <label className="p-3.5 rounded-[2px] bg-[#131c27] border border-[#2a3c52] flex items-start gap-3 cursor-pointer select-none hover:border-[#416082]">
@@ -796,7 +1033,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                   onClick={async () => {
                     setActionBusy(true)
                     try {
-                      await onUninstall(game.id, {
+                      await onUninstall(activeGame.id, {
                         deleteRomFromVault: deleteIsoToo,
                         deleteOriginalArchive: false
                       })

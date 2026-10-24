@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Play, Download } from 'lucide-react'
+import { Play, Download, Layers } from 'lucide-react'
 import { CatalogGame, InstalledGame } from '../../shared/types'
 
 interface GameCardProps {
@@ -26,6 +26,8 @@ export const GameCard: React.FC<GameCardProps> = ({
   const hasNativeLinux = game.platforms.includes('Linux')
   const hasWindows = game.platforms.includes('Windows')
   const usesProton = hostPlatform === 'linux' && !hasNativeLinux && hasWindows
+  const hasMultiPorts = Boolean(game.ports && game.ports.length > 1)
+  const portCount = game.ports?.length ?? 1
 
   return (
     <div
@@ -66,6 +68,17 @@ export const GameCard: React.FC<GameCardProps> = ({
           {game.consoleBadge}
         </span>
 
+        {/* Multi-Port Pill Indicator */}
+        {hasMultiPorts && (
+          <span
+            className="absolute bottom-2 left-2 z-20 px-2 py-0.5 bg-[#142334]/95 border border-[#1a9fff]/70 text-[#67c1f5] text-[9.5px] font-bold uppercase tracking-wider rounded-[2px] shadow flex items-center gap-1"
+            title={`${portCount} versões/ports diferentes disponíveis para este jogo`}
+          >
+            <Layers className="w-3 h-3 text-[#1a9fff]" />
+            <span>{portCount} PORTS</span>
+          </span>
+        )}
+
         {/* Top-right Installed / Proton Indicator */}
         {installed ? (
           <span
@@ -78,7 +91,9 @@ export const GameCard: React.FC<GameCardProps> = ({
             {installed.status === 'RUNNING'
               ? 'RODANDO'
               : installed.status === 'READY_TO_PLAY'
-                ? 'PRONTO'
+                ? hasMultiPorts
+                  ? 'INSTALADO'
+                  : 'PRONTO'
                 : 'REQUER ISO'}
           </span>
         ) : usesProton ? (
@@ -95,7 +110,10 @@ export const GameCard: React.FC<GameCardProps> = ({
             {game.title}
           </h3>
           <div className="flex items-center justify-between gap-2 mt-1 text-[11px] text-[#8f98a0]">
-            <span className="truncate">{game.projectName}</span>
+            <span className="truncate">
+              {game.projectName}
+              {hasMultiPorts ? ` (+${portCount - 1})` : ''}
+            </span>
             <span className="font-mono text-[10px] text-[#67707b] shrink-0">
               {game.version}
             </span>
@@ -103,9 +121,16 @@ export const GameCard: React.FC<GameCardProps> = ({
         </div>
 
         <div className="mt-3 pt-2 border-t border-[#233244] flex items-center justify-between gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-[#67c1f5] font-semibold truncate">
-            {game.inferredFamily}
-          </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[10px] uppercase tracking-wider text-[#67c1f5] font-semibold truncate">
+              {game.inferredFamily}
+            </span>
+            {hasMultiPorts && (
+              <span className="px-1 py-0.2 rounded-[2px] bg-[#1d2d3e] border border-[#2b4b6c] text-[9px] font-bold text-[#67c1f5] shrink-0">
+                +{portCount - 1}
+              </span>
+            )}
+          </div>
 
           <button
             onClick={(e) => onQuickAction(game, e)}

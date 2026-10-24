@@ -321,6 +321,8 @@ export function App(): React.ReactElement {
             <GameModal
               game={selectedGame}
               installed={selectedInstalled}
+              library={library}
+              downloads={downloads}
               activeDownload={selectedDownload}
               lastDownloadTask={selectedLastTask}
               onClose={() => setSelectedGame(null)}

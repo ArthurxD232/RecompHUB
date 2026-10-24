@@ -40,6 +40,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return map
   }, [library])
 
+  const isGameInstalled = (g: CatalogGame): boolean => {
+    if (installedByGameId.has(g.id)) return true
+    if (g.ports && g.ports.some((p) => installedByGameId.has(p.id))) return true
+    return false
+  }
+
+  const getInstalledForGame = (g: CatalogGame): InstalledGame | undefined => {
+    const direct = installedByGameId.get(g.id)
+    if (direct) return direct
+    if (g.ports) {
+      for (const p of g.ports) {
+        const found = installedByGameId.get(p.id)
+        if (found) return found
+      }
+    }
+    return undefined
+  }
+
   const consoles = useMemo(() => {
     const set = new Set<string>()
     for (const g of games) {
@@ -51,10 +69,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const filteredGames = useMemo(() => {
     const q = search.trim().toLowerCase()
     return games.filter((g) => {
-      if (onlyInstalled && !installedByGameId.has(g.id)) return false
+      const installed = isGameInstalled(g)
+      if (onlyInstalled && !installed) return false
       if (consoleFilter !== 'ALL' && g.consoleBadge !== consoleFilter) return false
       if (q) {
-        const hay = `${g.title} ${g.projectName}`.toLowerCase()
+        const portsText = g.ports
+          ? g.ports.map((p) => `${p.projectName} ${p.repoFullName}`).join(' ')
+          : ''
+        const hay = `${g.title} ${g.projectName} ${portsText}`.toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
@@ -66,7 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const byConsole = new Map<string, CatalogGame[]>()
 
     for (const g of filteredGames) {
-      if (installedByGameId.has(g.id)) {
+      if (isGameInstalled(g)) {
         installedList.push(g)
       }
       const list = byConsole.get(g.consoleBadge) || []
@@ -176,7 +198,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {!collapsedGroups['__INSTALLED__'] && (
               <div className="py-0.5">
                 {groupedGames.installedList.map((game) => {
-                  const inst = installedByGameId.get(game.id)
+                  const inst = getInstalledForGame(game)
                   const isSelected = selectedGame?.id === game.id
                   const isRunning = inst?.status === 'RUNNING'
                   const isReady = inst?.status === 'READY_TO_PLAY'
@@ -209,6 +231,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
                       </div>
                       <span className="truncate flex-1">{game.title}</span>
+                      {game.ports && game.ports.length > 1 && (
+                        <span className="text-[9px] px-1 py-0.2 bg-[#1b2633] border border-[#2b3e52] text-[#67c1f5] rounded font-mono shrink-0">
+                          {game.ports.length}p
+                        </span>
+                      )}
                       {isRunning && (
                         <span className="text-[9px] uppercase font-bold text-[#6cc034]">
                           Rodando
@@ -245,7 +272,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {!isCollapsed && (
                 <div className="py-0.5">
                   {list.map((game) => {
-                    const inst = installedByGameId.get(game.id)
+                    const inst = getInstalledForGame(game)
                     const isSelected = selectedGame?.id === game.id
                     return (
                       <button
@@ -274,6 +301,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           )}
                         </div>
                         <span className="truncate flex-1">{game.title}</span>
+                        {game.ports && game.ports.length > 1 && (
+                          <span className="text-[9px] px-1 py-0.2 bg-[#1b2633] border border-[#2b3e52] text-[#67c1f5] rounded font-mono shrink-0">
+                            {game.ports.length}p
+                          </span>
+                        )}
                       </button>
                     )
                   })}

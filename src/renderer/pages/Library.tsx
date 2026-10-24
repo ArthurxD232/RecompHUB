@@ -48,9 +48,14 @@ export const Library: React.FC<LibraryProps> = ({
   const [uninstalling, setUninstalling] = useState(false)
 
   const openGameDetails = (inst: InstalledGame): void => {
-    const found = catalog.find((c) => c.id === inst.gameId)
+    const found = catalog.find(
+      (c) => c.id === inst.gameId || c.ports?.some((p) => p.id === inst.gameId)
+    )
     if (found) {
-      onSelectGame(found)
+      onSelectGame({
+        ...found,
+        selectedPortId: inst.gameId
+      })
     }
   }
 

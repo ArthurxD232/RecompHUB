@@ -13,6 +13,7 @@ import {
   RomRequirement
 } from '../../shared/types'
 import { StoreService } from './store.service'
+import { groupCatalogGames } from './port-metadata.service'
 import recipesData from '../data/recipes.json'
 
 const CONSOLE_BADGE_MAP: Record<string, string> = {
@@ -378,15 +379,18 @@ export class CatalogService {
     }
 
     if (cached.games.length > 0) {
+      const prepared = cached.games.map((game) => this.attachRecipeInfo(game))
+      const grouped = groupCatalogGames(prepared)
       return {
-        games: cached.games.map((game) => this.attachRecipeInfo(game)),
+        games: grouped,
         lastUpdated: cached.lastUpdated,
         source: 'cache'
       }
     }
 
+    const fallback = this.getFallbackCatalog()
     return {
-      games: this.getFallbackCatalog(),
+      games: groupCatalogGames(fallback),
       lastUpdated: '',
       source: 'fallback'
     }
@@ -408,8 +412,10 @@ export class CatalogService {
       const scrapedGames = await this.scrapePortsDR()
       if (scrapedGames.length > 0) {
         this.store.setCatalogCache(scrapedGames)
+        const prepared = scrapedGames.map((g) => this.attachRecipeInfo(g))
+        const grouped = groupCatalogGames(prepared)
         const result: CatalogResult = {
-          games: scrapedGames,
+          games: grouped,
           lastUpdated: new Date().toISOString(),
           source: 'live'
         }
@@ -423,8 +429,10 @@ export class CatalogService {
     }
 
     if (cached.games.length > 0) {
+      const prepared = cached.games.map((g) => this.attachRecipeInfo(g))
+      const grouped = groupCatalogGames(prepared)
       return {
-        games: cached.games.map((g) => this.attachRecipeInfo(g)),
+        games: grouped,
         lastUpdated: cached.lastUpdated,
         source: 'cache'
       }
@@ -433,7 +441,7 @@ export class CatalogService {
     const fallback = this.getFallbackCatalog()
     this.store.setCatalogCache(fallback)
     const result: CatalogResult = {
-      games: fallback,
+      games: groupCatalogGames(fallback),
       lastUpdated: new Date().toISOString(),
       source: 'fallback'
     }
@@ -541,6 +549,14 @@ export class CatalogService {
         .filter((p): p is OSPlatform =>
           ['Windows', 'Linux', 'macOS', 'Android'].includes(p)
         )
+
+      // Exclude Android-only ports from the PC desktop catalog (future Android app will support them)
+      const hasDesktopPlatform = platforms.some((p) =>
+        ['Windows', 'Linux', 'macOS'].includes(p)
+      )
+      if (platforms.length > 0 && !hasDesktopPlatform) {
+        return
+      }
 
       const consoleBadge = CONSOLE_BADGE_MAP[originalPlatform] || originalPlatform
 

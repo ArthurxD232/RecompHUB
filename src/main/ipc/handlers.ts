@@ -28,11 +28,23 @@ export function registerIpcHandlers(
 
   const findGameById = async (gameId: string): Promise<CatalogGame> => {
     const { games } = await catalog.getCatalog(false)
-    const found = games.find((g) => g.id === gameId)
-    if (!found) {
-      throw new Error(`Jogo '${gameId}' não encontrado no catálogo.`)
+    for (const g of games) {
+      if (g.id === gameId || g.canonicalId === gameId) {
+        return g
+      }
+      if (g.ports) {
+        const port = g.ports.find((p) => p.id === gameId)
+        if (port) {
+          return {
+            ...g,
+            ...port,
+            id: port.id,
+            recipe: port.recipe || g.recipe
+          }
+        }
+      }
     }
-    return found
+    throw new Error(`Jogo '${gameId}' não encontrado no catálogo.`)
   }
 
   // Forward background events to renderer
