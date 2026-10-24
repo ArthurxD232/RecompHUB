@@ -110,6 +110,92 @@ export interface CatalogGame {
   description?: string
   highlights?: string[]
   differences?: string
+
+  // Community extensions
+  isCommunity?: boolean
+  submittedBy?: string
+  approvedAt?: string
+  verificationLevel?: VerificationLevel
+}
+
+export type VerificationLevel = 'verified' | 'community' | 'experimental'
+
+export interface CommunityPort {
+  id: string
+  title: string
+  projectName: string
+  repoFullName: string
+  releaseRepoFullName?: string
+  githubUrl: string
+  releaseUrl?: string
+  websiteUrl?: string
+  imageUrl?: string
+  console: string
+  consoleBadge: string
+  version: string
+  releaseStatus: ReleaseStatus
+  isAiAssisted?: boolean
+  platforms: OSPlatform[]
+  updatedAt: string
+  submittedBy?: string
+  approvedAt?: string
+  verificationLevel?: VerificationLevel
+  toolchainType?: string
+  howItWorks?: string
+  description?: string
+  highlights?: string[]
+  differences?: string
+  recipe?: GameRecipe
+  inferredFamily?: RecipeFamily
+  romRequirement?: RomRequirement
+}
+
+export interface CommunityResult {
+  ports: CatalogGame[]
+  lastUpdated: string
+  source: 'live' | 'cache' | 'fallback'
+}
+
+export interface InspectedGitHubRepo {
+  owner: string
+  repo: string
+  fullName: string
+  githubUrl: string
+  title: string
+  projectName: string
+  description: string
+  stars: number
+  forks: number
+  defaultBranch: string
+  hasReleases: boolean
+  latestTagName?: string
+  latestReleaseName?: string
+  latestReleaseUrl?: string
+  publishedAt?: string
+  assets: {
+    name: string
+    size: number
+    browserDownloadUrl: string
+  }[]
+  detectedPlatforms: OSPlatform[]
+  suggestedConsoleBadge?: string
+  suggestedToolchain?: string
+  avatarUrl?: string
+}
+
+export interface SubmitPortPayload {
+  githubUrl: string
+  title: string
+  projectName: string
+  console: string
+  consoleBadge: string
+  description: string
+  toolchainType: string
+  howItWorks?: string
+  highlights?: string[]
+  romExtension?: string
+  submittedBy?: string
+  notes?: string
 }
 
 export interface GitHubAsset {
@@ -246,6 +332,12 @@ export interface RecompHubAPI {
   getCatalog: (forceRefresh?: boolean) => Promise<CatalogResult>
   onCatalogUpdated: (callback: (result: CatalogResult) => void) => () => void
   resolveRelease: (gameId: string) => Promise<ResolvedReleaseInfo>
+
+  // Community Ports & Submissions
+  getCommunityPorts: (forceRefresh?: boolean) => Promise<CommunityResult>
+  onCommunityUpdated: (callback: (result: CommunityResult) => void) => () => void
+  inspectGitHubRepoForPort: (githubUrl: string) => Promise<InspectedGitHubRepo>
+  generateCommunityIssueUrl: (payload: SubmitPortPayload) => Promise<string>
 
   // Local ROM/ISO Vault & Selection (supports raw ISO/ROM or .zip/.7z/.rar/.tar.gz)
   getVaultEntries: () => Promise<RomVaultEntry[]>

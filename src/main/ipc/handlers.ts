@@ -7,9 +7,11 @@ import { RomVaultService } from '../services/rom-vault.service'
 import { RecipeService } from '../services/recipe.service'
 import { DownloaderService } from '../services/downloader.service'
 import { RunnerService } from '../services/runner.service'
+import { CommunityService } from '../services/community.service'
 import {
   CatalogGame,
   InstalledGame,
+  SubmitPortPayload,
   UninstallGameOptions
 } from '../../shared/types'
 
@@ -22,9 +24,10 @@ export function registerIpcHandlers(
     recipe: RecipeService
     downloader: DownloaderService
     runner: RunnerService
+    community: CommunityService
   }
 ): void {
-  const { store, catalog, romVault, recipe, downloader, runner } = services
+  const { store, catalog, romVault, recipe, downloader, runner, community } = services
 
   const findGameById = async (gameId: string): Promise<CatalogGame> => {
     const { games } = await catalog.getCatalog(false)
@@ -44,6 +47,26 @@ export function registerIpcHandlers(
         }
       }
     }
+
+    // Also search in community ports!
+    const { ports: communityPorts } = await community.getCommunityPorts(false)
+    for (const g of communityPorts) {
+      if (g.id === gameId || g.canonicalId === gameId) {
+        return g
+      }
+      if (g.ports) {
+        const port = g.ports.find((p) => p.id === gameId)
+        if (port) {
+          return {
+            ...g,
+            ...port,
+            id: port.id,
+            recipe: port.recipe || g.recipe
+          }
+        }
+      }
+    }
+
     throw new Error(`Jogo '${gameId}' não encontrado no catálogo.`)
   }
 
@@ -70,6 +93,14 @@ export function registerIpcHandlers(
     }
   })
 
+  // Community Ports
+  community.onUpdated((result) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('event:communityUpdated', result)
+    }
+  })
+
   ipcMain.handle('catalog:get', async (_e, forceRefresh?: boolean) => {
     return catalog.getCatalog(Boolean(forceRefresh))
   })
@@ -77,6 +108,18 @@ export function registerIpcHandlers(
   ipcMain.handle('catalog:resolveRelease', async (_e, gameId: string) => {
     const game = await findGameById(gameId)
     return catalog.resolveRelease(game)
+  })
+
+  ipcMain.handle('community:get', async (_e, forceRefresh?: boolean) => {
+    return community.getCommunityPorts(Boolean(forceRefresh))
+  })
+
+  ipcMain.handle('community:inspectRepo', async (_e, githubUrl: string) => {
+    return community.inspectGitHubRepo(githubUrl)
+  })
+
+  ipcMain.handle('community:generateIssueUrl', async (_e, payload: SubmitPortPayload) => {
+    return community.generateCommunityIssueUrl(payload)
   })
 
   // ROM Vault & Per-Game ISO/ROM Selection (supports raw ISO/ROM or .zip/.7z/.rar/.tar.gz)

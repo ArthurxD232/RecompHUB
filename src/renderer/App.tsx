@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Download, ExternalLink, FolderPlus } from 'lucide-react'
 import { Sidebar, NavTab } from './components/Sidebar'
 import { Catalog } from './pages/Catalog'
+import { Community } from './pages/Community'
 import { Library } from './pages/Library'
 import { Settings } from './pages/Settings'
 import { DownloadManager } from './components/DownloadManager'
@@ -25,6 +26,14 @@ export function App(): React.ReactElement {
   const [lastUpdated, setLastUpdated] = useState<string>('')
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
 
+  // Community Ports State
+  const [communityPorts, setCommunityPorts] = useState<CatalogGame[]>([])
+  const [communitySource, setCommunitySource] = useState<
+    'live' | 'cache' | 'fallback'
+  >('cache')
+  const [communityLastUpdated, setCommunityLastUpdated] = useState<string>('')
+  const [isCommunityRefreshing, setIsCommunityRefreshing] = useState<boolean>(false)
+
   const [library, setLibrary] = useState<InstalledGame[]>([])
   const [downloads, setDownloads] = useState<DownloadTaskProgress[]>([])
   const [vaultEntries, setVaultEntries] = useState<RomVaultEntry[]>([])
@@ -41,9 +50,10 @@ export function App(): React.ReactElement {
   const loadInitialData = async (): Promise<void> => {
     setIsRefreshing(true)
     try {
-      const [catRes, libRes, dlRes, vaultRes, setRes, hostRes] =
+      const [catRes, comRes, libRes, dlRes, vaultRes, setRes, hostRes] =
         await Promise.all([
           window.api.getCatalog(false),
+          window.api.getCommunityPorts(false),
           window.api.getLibrary(),
           window.api.getActiveDownloads(),
           window.api.getVaultEntries(),
@@ -54,6 +64,11 @@ export function App(): React.ReactElement {
       setCatalog(catRes.games)
       setCatalogSource(catRes.source)
       setLastUpdated(catRes.lastUpdated)
+
+      setCommunityPorts(comRes.ports)
+      setCommunitySource(comRes.source)
+      setCommunityLastUpdated(comRes.lastUpdated)
+
       setLibrary(libRes)
       setDownloads(dlRes)
       setVaultEntries(vaultRes)
@@ -91,6 +106,12 @@ export function App(): React.ReactElement {
       setLastUpdated(result.lastUpdated)
     })
 
+    const unsubCommunity = window.api.onCommunityUpdated((result) => {
+      setCommunityPorts(result.ports)
+      setCommunitySource(result.source)
+      setCommunityLastUpdated(result.lastUpdated)
+    })
+
     const unsubLib = window.api.onLibraryUpdated((updatedLib) => {
       setLibrary(updatedLib)
     })
@@ -102,6 +123,7 @@ export function App(): React.ReactElement {
     return () => {
       unsubDl()
       unsubCatalog()
+      unsubCommunity()
       unsubLib()
       unsubScan()
     }
@@ -116,6 +138,18 @@ export function App(): React.ReactElement {
       setLastUpdated(res.lastUpdated)
     } finally {
       setIsRefreshing(false)
+    }
+  }
+
+  const handleRefreshCommunity = async (): Promise<void> => {
+    setIsCommunityRefreshing(true)
+    try {
+      const res = await window.api.getCommunityPorts(true)
+      setCommunityPorts(res.ports)
+      setCommunitySource(res.source)
+      setCommunityLastUpdated(res.lastUpdated)
+    } finally {
+      setIsCommunityRefreshing(false)
     }
   }
 
@@ -218,6 +252,7 @@ export function App(): React.ReactElement {
 
   const topTabs: { id: NavTab; label: string; count?: number; badgeActive?: boolean }[] = [
     { id: 'catalog', label: 'CATÁLOGO', count: catalog.length },
+    { id: 'community', label: 'COMUNIDADE', count: communityPorts.length },
     { id: 'library', label: 'BIBLIOTECA', count: library.length },
     {
       id: 'downloads',
@@ -305,7 +340,7 @@ export function App(): React.ReactElement {
       {/* 2. Middle Split Area: Left Steam Game Tree + Right Workspace */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         <Sidebar
-          games={catalog}
+          games={activeTab === 'community' ? communityPorts : catalog}
           library={library}
           selectedGame={selectedGame}
           activeTab={activeTab}
@@ -349,6 +384,21 @@ export function App(): React.ReactElement {
                   isRefreshing={isRefreshing}
                   hostPlatform={hostPlatform}
                   onRefresh={handleRefreshCatalog}
+                  onSelectGame={setSelectedGame}
+                  onQuickAction={handleQuickAction}
+                />
+              )}
+
+              {activeTab === 'community' && (
+                <Community
+                  ports={communityPorts}
+                  library={library}
+                  downloads={downloads}
+                  lastUpdated={communityLastUpdated}
+                  source={communitySource}
+                  isRefreshing={isCommunityRefreshing}
+                  hostPlatform={hostPlatform}
+                  onRefresh={handleRefreshCommunity}
                   onSelectGame={setSelectedGame}
                   onQuickAction={handleQuickAction}
                 />

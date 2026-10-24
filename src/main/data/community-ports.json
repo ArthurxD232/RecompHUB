@@ -1,0 +1,140 @@
+[
+  {
+    "id": "community__open-goal__jak-project__opengoal",
+    "title": "Jak and Daxter: The Precursor Legacy",
+    "projectName": "OpenGOAL",
+    "repoFullName": "open-goal/jak-project",
+    "githubUrl": "https://github.com/open-goal/jak-project",
+    "releaseUrl": "https://github.com/open-goal/jak-project/releases/latest",
+    "imageUrl": "https://cdn2.steamgriddb.com/thumb/fa9306e902c5c56d784a92c4749f155b.jpg",
+    "console": "PlayStation 2",
+    "consoleBadge": "PS2",
+    "version": "v0.2.14",
+    "releaseStatus": "Latest",
+    "platforms": ["Windows", "Linux"],
+    "updatedAt": "2026-10-15T18:00:00Z",
+    "submittedBy": "@ArthurxD232",
+    "approvedAt": "2026-10-24T12:00:00Z",
+    "verificationLevel": "verified",
+    "toolchainType": "OpenGOAL (Compilador GOAL Nativo x86_64)",
+    "howItWorks": "Engenharia reversa inovadora da linguagem GOAL criada pela Naughty Dog. O código é recompilado nativamente para arquiteturas x86_64 sem necessidade de emulador de PS2.",
+    "description": "Port nativo de altíssima fidelidade de Jak and Daxter rodando a 144+ FPS no PC com suporte a telas Ultrawide.",
+    "highlights": [
+      "144+ FPS destravado sem alterar a física",
+      "Suporte a monitores Widescreen e Ultrawide",
+      "Controles analógicos modernos com vibração",
+      "Carregamento de fases instantâneo"
+    ],
+    "differences": "Permite jogar o clássico de PS2 a taxas de quadros extremas com gráficos limpos e suporte a mods.",
+    "romRequirement": {
+      "id": "jak1_ps2_iso",
+      "label": "ISO original de Jak and Daxter (PS2)",
+      "type": "iso",
+      "expectedFilename": "jak1.iso",
+      "extensions": [".iso", ".bin"]
+    }
+  },
+  {
+    "id": "community__sm64-port__sm64-port__sm64-pc-port",
+    "title": "Super Mario 64",
+    "projectName": "sm64-port",
+    "repoFullName": "sm64-port/sm64-port",
+    "githubUrl": "https://github.com/sm64-port/sm64-port",
+    "releaseUrl": "https://github.com/sm64-port/sm64-port/releases/latest",
+    "imageUrl": "https://cdn2.steamgriddb.com/thumb/f144db8f2655bf939cf5c66b26c04fdf.jpg",
+    "console": "Nintendo 64",
+    "consoleBadge": "N64",
+    "version": "v1.1",
+    "releaseStatus": "Latest",
+    "platforms": ["Windows", "Linux", "macOS"],
+    "updatedAt": "2026-09-20T14:30:00Z",
+    "submittedBy": "@LucasSchaefer09",
+    "approvedAt": "2026-10-24T12:00:00Z",
+    "verificationLevel": "verified",
+    "toolchainType": "Descompilação C & Port Nativo OpenGL/DirectX",
+    "howItWorks": "Descompilação linha a linha do código original de Nintendo 64 para código C puro compilado diretamente para binário de PC.",
+    "description": "O lendário port nativo de Super Mario 64 com suporte a 60 FPS, widescreen real e suporte a pacotes de textura HD.",
+    "highlights": [
+      "60 FPS fluidos com câmera analógica livre",
+      "Suporte a Widescreen nativo sem esticar a tela",
+      "Compatibilidade com modelos e texturas HD",
+      "Zero input lag"
+    ],
+    "differences": "O port da comunidade mais testado e aprimorado de Mario 64 para computadores modernos.",
+    "romRequirement": {
+      "id": "sm64_us_rom",
+      "label": "ROM original de Super Mario 64 (USA) (.z64)",
+      "type": "rom",
+      "expectedFilename": "baserom.us.z64",
+      "extensions": [".z64", ".n64", ".v64"]
+    }
+  },
+  {
+    "id": "community__rubberduckycooly__sonic-mania-decompilation__rsdkv5",
+    "title": "Sonic Mania",
+    "projectName": "SonicMania-Decompilation",
+    "repoFullName": "Rubberduckycooly/Sonic-Mania-Decompilation",
+    "githubUrl": "https://github.com/Rubberduckycooly/Sonic-Mania-Decompilation",
+    "releaseUrl": "https://github.com/Rubberduckycooly/Sonic-Mania-Decompilation/releases/latest",
+    "imageUrl": "https://cdn2.steamgriddb.com/thumb/fa042dbde5bc3f3da3b44b61aaeb8ca1.jpg",
+    "console": "PC / Outros",
+    "consoleBadge": "PC / Outros",
+    "version": "v1.2.0",
+    "releaseStatus": "Latest",
+    "platforms": ["Windows", "Linux"],
+    "updatedAt": "2026-10-01T10:15:00Z",
+    "submittedBy": "@RetroFan",
+    "approvedAt": "2026-10-24T12:00:00Z",
+    "verificationLevel": "verified",
+    "toolchainType": "Descompilação RSDKv5 Nativa C++",
+    "howItWorks": "Descompilação completa da engine Retro Engine (RSDKv5) para C++, permitindo rodar os dados originais do jogo com máxima eficiência.",
+    "description": "Port nativo ultraleve de Sonic Mania sem DRM, com suporte ilimitado a mods e tempos de resposta instantâneos.",
+    "highlights": [
+      "Sem travas de DRM e sem overhead",
+      "Suporte amplo ao Mania Mod Loader",
+      "Resoluções e taxas de quadros personalizáveis"
+    ],
+    "differences": "Execução nativa direta com foco na comunidade de mods e compatibilidade entre plataformas.",
+    "romRequirement": {
+      "id": "sonic_mania_data",
+      "label": "Arquivo Data.rsdk original do Sonic Mania",
+      "type": "iso",
+      "expectedFilename": "Data.rsdk",
+      "extensions": [".rsdk", ".zip"]
+    }
+  },
+  {
+    "id": "community__rayman2pc__rayman2pc__rayman2-pc",
+    "title": "Rayman 2: The Great Escape",
+    "projectName": "Rayman2PC",
+    "repoFullName": "Rayman2PC/Rayman2PC",
+    "githubUrl": "https://github.com/Rayman2PC/Rayman2PC",
+    "releaseUrl": "https://github.com/Rayman2PC/Rayman2PC/releases/latest",
+    "imageUrl": "https://cdn2.steamgriddb.com/thumb/c7ef28d9ec76f2d90d80c058729906c6.jpg",
+    "console": "Nintendo 64",
+    "consoleBadge": "N64",
+    "version": "v0.9.5-beta",
+    "releaseStatus": "Latest",
+    "platforms": ["Windows", "Linux"],
+    "updatedAt": "2026-08-10T16:40:00Z",
+    "submittedBy": "@RaymanFanClub",
+    "approvedAt": "2026-10-24T12:00:00Z",
+    "verificationLevel": "community",
+    "toolchainType": "Recompilação Nativa & Engine Moderna",
+    "howItWorks": "Engenharia reversa dos binários clássicos com adaptação para DirectX e Vulkan modernos de PC.",
+    "description": "Port da comunidade que moderniza Rayman 2 para rodar nativamente em 4K e 60 FPS nos computadores atuais.",
+    "highlights": [
+      "Suporte a 60 FPS",
+      "Resoluções 4K e Ultrawide nativas",
+      "Mapeamento moderno de controles com XInput"
+    ],
+    "differences": "Resolve todos os problemas de compatibilidade e bugs gráficos das versões antigas de PC.",
+    "romRequirement": {
+      "id": "rayman2_rom",
+      "label": "ROM ou ISO original de Rayman 2 (.z64 / .iso)",
+      "type": "rom",
+      "expectedFilename": "rayman2.z64",
+      "extensions": [".z64", ".n64", ".iso"]
+    }
+  }
+]

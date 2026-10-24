@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { CatalogGame, InstalledGame } from '../../shared/types'
 
-export type NavTab = 'catalog' | 'library' | 'downloads' | 'settings'
+export type NavTab = 'catalog' | 'community' | 'library' | 'downloads' | 'settings'
 
 interface SidebarProps {
   games: CatalogGame[]
@@ -122,7 +122,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }
           }}
           className={`w-full flex items-center justify-between px-3 py-1.5 rounded-sm text-xs font-semibold tracking-wide transition-colors ${
-            !selectedGame && (activeTab === 'catalog' || activeTab === 'library')
+            !selectedGame &&
+            (activeTab === 'catalog' ||
+              activeTab === 'community' ||
+              activeTab === 'library')
               ? 'bg-[#2b3440] text-white'
               : 'bg-[#21262e] text-[#8f98a0] hover:bg-[#282e38] hover:text-[#dcdedf]'
           }`}

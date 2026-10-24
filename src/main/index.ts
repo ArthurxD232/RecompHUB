@@ -7,6 +7,7 @@ import { RomVaultService } from './services/rom-vault.service'
 import { RecipeService } from './services/recipe.service'
 import { DownloaderService } from './services/downloader.service'
 import { RunnerService } from './services/runner.service'
+import { CommunityService } from './services/community.service'
 import { registerIpcHandlers } from './ipc/handlers'
 
 let mainWindow: BrowserWindow | null = null
@@ -63,6 +64,7 @@ app.whenReady().then(() => {
   const recipe = new RecipeService(store, romVault)
   const downloader = new DownloaderService(store, catalog, romVault, recipe)
   const runner = new RunnerService(store, downloader)
+  const community = new CommunityService(store)
 
   registerIpcHandlers(() => mainWindow, {
     store,
@@ -70,7 +72,8 @@ app.whenReady().then(() => {
     romVault,
     recipe,
     downloader,
-    runner
+    runner,
+    community
   })
 
   createWindow()

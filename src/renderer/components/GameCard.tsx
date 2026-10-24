@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Play, Download, Layers } from 'lucide-react'
+import { Play, Download, Layers, Users, ShieldCheck } from 'lucide-react'
 import { CatalogGame, InstalledGame } from '../../shared/types'
 
 interface GameCardProps {
@@ -67,6 +67,21 @@ export const GameCard: React.FC<GameCardProps> = ({
         <span className="absolute top-2 left-2 z-20 px-1.5 py-0.5 bg-[#171a21]/90 border border-[#324458] text-[#67c1f5] text-[10px] font-bold uppercase tracking-wider rounded-[2px]">
           {game.consoleBadge}
         </span>
+
+        {/* Community Verification Badge */}
+        {game.isCommunity && (
+          <span
+            className="absolute top-2 left-14 z-20 px-1.5 py-0.5 bg-[#142334]/90 border border-[#2b527d] text-[#7ebaf5] text-[9px] font-bold uppercase tracking-wider rounded-[2px] flex items-center gap-1 shadow-sm"
+            title={`Port enviado pela comunidade${game.submittedBy ? ` por ${game.submittedBy}` : ''}`}
+          >
+            {game.verificationLevel === 'verified' ? (
+              <ShieldCheck className="w-2.5 h-2.5 text-[#38bdf8]" />
+            ) : (
+              <Users className="w-2.5 h-2.5 text-[#60a5fa]" />
+            )}
+            <span>{game.verificationLevel === 'verified' ? 'VERIFICADO' : 'COMUNIDADE'}</span>
+          </span>
+        )}
 
         {/* Multi-Port Pill Indicator */}
         {hasMultiPorts && (

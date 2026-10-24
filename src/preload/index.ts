@@ -2,9 +2,11 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   AppSettings,
   CatalogResult,
+  CommunityResult,
   DownloadTaskProgress,
   InstalledGame,
   RecompHubAPI,
+  SubmitPortPayload,
   UninstallGameOptions
 } from '../shared/types'
 
@@ -19,6 +21,19 @@ const api: RecompHubAPI = {
   },
   resolveRelease: (gameId: string) =>
     ipcRenderer.invoke('catalog:resolveRelease', gameId),
+
+  // Community Ports & Submissions
+  getCommunityPorts: (forceRefresh?: boolean) =>
+    ipcRenderer.invoke('community:get', forceRefresh),
+  onCommunityUpdated: (callback: (result: CommunityResult) => void) => {
+    const handler = (_e: any, data: CommunityResult): void => callback(data)
+    ipcRenderer.on('event:communityUpdated', handler)
+    return () => ipcRenderer.removeListener('event:communityUpdated', handler)
+  },
+  inspectGitHubRepoForPort: (githubUrl: string) =>
+    ipcRenderer.invoke('community:inspectRepo', githubUrl),
+  generateCommunityIssueUrl: (payload: SubmitPortPayload) =>
+    ipcRenderer.invoke('community:generateIssueUrl', payload),
 
   // ROM Vault & Selection
   getVaultEntries: () => ipcRenderer.invoke('vault:getEntries'),

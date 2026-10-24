@@ -1,0 +1,89 @@
+name: 🎮 Sugerir Novo Port da Comunidade
+description: Sugira um port ou descompilação do GitHub para inclusão no RecompHUB
+title: "[Sugestão de Port]: "
+labels: ["community-port-submission"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por ajudar a expandir o catálogo do RecompHUB! 🚀
+        Preencha os campos abaixo com as informações do port no GitHub.
+  - type: input
+    id: github_url
+    attributes:
+      label: Link do Repositório no GitHub
+      description: URL completa do repositório oficial do port.
+      placeholder: https://github.com/autor/projeto
+    validations:
+      required: true
+  - type: input
+    id: game_title
+    attributes:
+      label: Título do Jogo Original
+      description: Nome comercial do jogo original.
+      placeholder: Ex: Super Mario 64
+    validations:
+      required: true
+  - type: input
+    id: project_name
+    attributes:
+      label: Nome do Projeto do Port
+      description: Nome do projeto da comunidade.
+      placeholder: Ex: sm64-port
+    validations:
+      required: true
+  - type: dropdown
+    id: console_badge
+    attributes:
+      label: Plataforma / Console Original
+      options:
+        - Nintendo 64 (N64)
+        - PlayStation 1 (PS1)
+        - PlayStation 2 (PS2)
+        - PlayStation 3 (PS3)
+        - Xbox 360
+        - Nintendo GameCube
+        - Nintendo Wii
+        - Sega Dreamcast
+        - Super Nintendo (SNES)
+        - Game Boy Advance (GBA)
+        - PC / Outros
+    validations:
+      required: true
+  - type: dropdown
+    id: toolchain
+    attributes:
+      label: Toolchain / Método de Criação
+      options:
+        - Recompilação Estática (N64Recomp)
+        - Recompilação Estática (PSXRecomp)
+        - Recompilação Estática (XenonRecomp)
+        - Descompilação C & Engine libultraship
+        - Descompilação & Port Nativo C/C++
+        - Reimplementação de Engine / Engine Moderna
+        - Port Nativo C/C++ Recompilado
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Breve Descrição & Recursos
+      description: Destaques principais (60 FPS, widescreen, suporte a controles, etc.).
+      placeholder: Descreva resumidamente os recursos e como o port se comporta.
+    validations:
+      required: true
+  - type: input
+    id: rom_ext
+    attributes:
+      label: Extensão da ISO / ROM Exigida
+      description: Qual arquivo original do jogo é necessário?
+      placeholder: Ex: .z64, .iso, .bin
+    validations:
+      required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: Observações Extras
+      description: Instruções especiais de execução ou configurações adicionais.
+    validations:
+      required: false
