@@ -9,15 +9,18 @@ Catálogo de jogos fornecido pelo **[PortsDR.com](https://portsdr.com/)**, criad
 ## ✨ O que tem nesta versão
 
 - 📚 **Catálogo automático** puxado do PortsDR.com (jogos novos aparecem sozinhos)
+- 🗂️ **Agrupamento de múltiplos ports**: Jogos repetidos (como *Majora's Mask*, *Banjo-Kazooie*, *Crash Team Racing*, *GoldenEye 007*) agora ficam juntos em um único card limpo com seletor de versões
+- 🔍 **Comparativo & Tecnologias dos Ports**: Mostra visualmente o que cada port é, como foi feito (Recompilação Estática via N64Recomp/XenonRecomp/PSXRecomp vs Descompilação & libultraship vs Nativo) e seus pontos fortes (144+ FPS, Ray Tracing RT64, Mods, etc.)
+- 💻 **Foco Desktop PC**: Filtramos os ports exclusivos de Android para que o launcher de computador fique 100% focado no PC
 - ⬇️ **Instalação em 1 clique** direto do GitHub oficial de cada port
-- 💿 **Use a sua própria ISO/ROM** – arquivo direto ou compactado (.zip / .7z / .rar)
-- 🔍 **Reconhecimento automático da ROM** pelo hash (mesmo com outro nome)
-- ⚙️ **Configuração automática** de cada jogo (nome da ROM, modo portátil, extratores de assets)
+- 💿 **Use a sua própria ISO/ROM** – arquivo direto ou compactado (.zip / .7z / .rar) com descompactação automática
+- 🔍 **Reconhecimento automático da ROM** pelo hash (mesmo com outro nome) e conversão automática para Big-Endian (.z64)
+- ⚙️ **Configuração automática** de cada jogo (nome da ROM, modo portátil, extratores de assets como .o2r/.otr)
 - 🐧 **Jogos de Windows rodam no Linux** via Proton / umu-run automaticamente
 - 📊 **Progresso na aba Downloads** (download, descompactação e instalação)
-- 🖥️ **Botão de tela cheia** para jogos compatíveis
-- 🗑️ **Desinstalar de verdade** – opção de apagar também a ISO/ROM do computador
-- 🎨 Interface no estilo Steam
+- 🖥️ **Botão de tela cheia** para jogos compatíveis (F11 / Alt+Enter)
+- 🗑️ **Desinstalar de verdade** – opção de apagar também a ISO/ROM do computador para liberar espaço
+- 🎨 Interface rápida e moderna no estilo Steam
 
 ## ⚠️ Importante
 
