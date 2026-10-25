@@ -13,6 +13,8 @@ export interface CatalogResult {
   games: CatalogGame[]
   lastUpdated: string
   source: 'live' | 'cache' | 'fallback'
+  /** true quando a sincronização não encontrou mudanças (games vem vazio e deve ser ignorado). */
+  unchanged?: boolean
 }
 
 export interface RomRequirement {
@@ -25,6 +27,8 @@ export interface RomRequirement {
   extensions: string[]
   optional?: boolean
   region?: string
+  /** Mantém o nome original do arquivo ao parear (útil quando o formato varia: .iso, .rvz, .wbfs...). */
+  keepOriginalName?: boolean
 }
 
 export interface GameRecipe {
@@ -49,6 +53,12 @@ export interface GameRecipe {
     targetSubdir?: string
   }
   executableHints?: string[]
+  /**
+   * Argumentos extras passados ao executável ao jogar. Aceita os marcadores
+   * {ROM_PATH} (ISO/ROM pareada na pasta do jogo) e {INSTALL_DIR}.
+   * Argumentos com {ROM_PATH} são omitidos se nenhuma ISO/ROM estiver pareada.
+   */
+  launchArgs?: string[]
   requirements: RomRequirement[]
   notes?: string
 }
@@ -154,6 +164,8 @@ export interface CommunityResult {
   ports: CatalogGame[]
   lastUpdated: string
   source: 'live' | 'cache' | 'fallback'
+  /** true quando a sincronização não encontrou mudanças (ports vem vazio e deve ser ignorado). */
+  unchanged?: boolean
 }
 
 export interface InspectedGitHubRepo {
@@ -290,6 +302,7 @@ export interface InstalledGame {
   pairedRomPaths: string[]
   portableMode: boolean
   launchFullscreen?: boolean
+  launchArgs?: string[]
   playTimeSeconds: number
   lastPlayedAt?: string
   installedAt: string

@@ -205,6 +205,39 @@ export class RunnerService {
     }
   }
 
+  /**
+   * Expande os marcadores de `launchArgs` da receita ({ROM_PATH}, {INSTALL_DIR}).
+   * Quando o jogo roda via Wine/Proton, caminhos Unix são convertidos para o drive Z:.
+   */
+  private resolveLaunchArgs(game: InstalledGame, viaWine: boolean): string[] {
+    const templates = game.launchArgs
+    if (!templates || templates.length === 0) return []
+
+    // realpath devolve o arquivo original quando a ISO/ROM foi pareada por symlink
+    const romPath = game.pairedRomPaths
+      ?.filter((p) => fs.existsSync(p))
+      .map((p) => {
+        try {
+          return fs.realpathSync(p)
+        } catch {
+          return p
+        }
+      })[0]
+    const toHostPath = (p: string): string =>
+      viaWine ? `Z:${p.replace(/\//g, '\\')}` : p
+
+    const resolved: string[] = []
+    for (const template of templates) {
+      if (template.includes('{ROM_PATH}')) {
+        if (!romPath) continue
+        resolved.push(template.replace('{ROM_PATH}', toHostPath(romPath)))
+      } else {
+        resolved.push(template.replace('{INSTALL_DIR}', toHostPath(game.installDir)))
+      }
+    }
+    return resolved
+  }
+
   private buildLaunchCommand(game: InstalledGame): {
     cmd: string
     args: string[]
@@ -215,7 +248,7 @@ export class RunnerService {
     const isAppImage = game.executablePath.toLowerCase().endsWith('.appimage')
     const execDir = path.dirname(game.executablePath) || game.installDir
 
-    const extraArgs: string[] = []
+    const extraArgs: string[] = this.resolveLaunchArgs(game, isLinux && isExe)
     const extraEnv: Record<string, string> = {}
 
     // Detect PS2 Static Recompilation runtime (e.g. Ace Combat 5: ps2_image.bin + shaders)
@@ -295,6 +328,14 @@ export class RunnerService {
             ...extraEnv,
             APPIMAGE_EXTRACT_AND_RUN: '1'
           }
+        }
+      }
+      if (!isLinux && /\.(bat|cmd)$/i.test(game.executablePath)) {
+        // O Node não executa .bat diretamente: passa pelo interpretador de comandos do Windows
+        return {
+          cmd: process.env.ComSpec || 'cmd.exe',
+          args: ['/c', game.executablePath, ...extraArgs],
+          env: { ...extraEnv }
         }
       }
       return {

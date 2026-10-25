@@ -15,6 +15,10 @@ interface StoreSchema {
     games: CatalogGame[]
     lastUpdated: string
   }
+  /** Hash da última página do PortsDR processada (o site não envia ETag; evita reprocessar HTML idêntico). */
+  catalogMeta?: {
+    htmlHash?: string
+  }
   romVault: RomVaultEntry[]
   library: InstalledGame[]
 }
@@ -94,7 +98,8 @@ export class StoreService {
   private saveToDisk(): void {
     try {
       const tempPath = `${this.storePath}.tmp`
-      fs.writeFileSync(tempPath, JSON.stringify(this.data, null, 2), 'utf-8')
+      // JSON compacto: o cache do catálogo passa de 1 MB e a escrita é síncrona
+      fs.writeFileSync(tempPath, JSON.stringify(this.data), 'utf-8')
       fs.renameSync(tempPath, this.storePath)
     } catch (err) {
       console.error('[StoreService] Failed to write store file:', err)
@@ -118,11 +123,16 @@ export class StoreService {
     return this.data.catalogCache
   }
 
-  public setCatalogCache(games: CatalogGame[]): void {
+  public getCatalogHtmlHash(): string | undefined {
+    return this.data.catalogMeta?.htmlHash
+  }
+
+  public setCatalogCache(games: CatalogGame[], htmlHash?: string): void {
     this.data.catalogCache = {
       games,
       lastUpdated: new Date().toISOString()
     }
+    if (htmlHash) this.data.catalogMeta = { htmlHash }
     this.saveToDisk()
   }
 

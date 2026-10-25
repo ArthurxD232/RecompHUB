@@ -12,6 +12,13 @@ import { registerIpcHandlers } from './ipc/handlers'
 
 let mainWindow: BrowserWindow | null = null
 
+// Diagnóstico de abertura: RECOMPHUB_TRACE=1 imprime o tempo (ms desde o início do processo) de cada etapa.
+const TRACE_STARTUP = Boolean(process.env['RECOMPHUB_TRACE'])
+function trace(label: string): void {
+  if (TRACE_STARTUP) console.log(`[startup] ${label}: ${Math.round(performance.now())}ms`)
+}
+trace('main-module-loaded')
+
 // Mantém a pasta de dados fixa em "recomphub" (ex.: ~/.config/recomphub, %APPDATA%\recomphub),
 // independente do productName "RecompHUB", para não perder jogos/configurações já existentes.
 app.setPath('userData', join(app.getPath('appData'), 'recomphub'))
@@ -26,18 +33,32 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#171a21',
-    icon: iconPath,
+    // No Windows empacotado o ícone já está embutido no .exe (evita decodificar o PNG grande na abertura)
+    ...(process.platform === 'win32' && app.isPackaged ? {} : { icon: iconPath }),
     title: 'RecompHUB — 1-Click Decomp & Static Recomp PC Launcher (beta-0.1)',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      contextIsolation: true
+      contextIsolation: true,
+      spellcheck: false
     }
   })
 
   mainWindow.on('ready-to-show', () => {
+    trace('window-ready-to-show')
     mainWindow?.show()
   })
+
+  if (TRACE_STARTUP) {
+    mainWindow.webContents.on('did-finish-load', () => trace('renderer-did-finish-load'))
+    mainWindow.webContents.on('console-message', (_e, _level, message) => {
+      const match = /^\[startup\] (.+?) epoch=(\d+)$/.exec(message)
+      if (match) {
+        const sinceStart = Number(match[2]) - performance.timeOrigin
+        console.log(`[startup] renderer:${match[1]}: ${Math.round(sinceStart)}ms`)
+      }
+    })
+  }
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -52,6 +73,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  trace('app-ready')
   electronApp.setAppUserModelId('com.recomphub.launcher')
 
   app.on('browser-window-created', (_, window) => {
@@ -66,6 +88,7 @@ app.whenReady().then(() => {
   const runner = new RunnerService(store, downloader)
   const community = new CommunityService(store)
 
+  trace('services-created')
   registerIpcHandlers(() => mainWindow, {
     store,
     catalog,
@@ -76,7 +99,9 @@ app.whenReady().then(() => {
     community
   })
 
+  trace('ipc-registered')
   createWindow()
+  trace('window-created')
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

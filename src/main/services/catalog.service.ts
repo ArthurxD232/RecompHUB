@@ -1,6 +1,7 @@
 // 'cheerio/slim' expõe o mesmo load() sem puxar o undici (que faz require('node:sqlite'),
 // módulo inexistente no Node 20 do Electron 33 e que quebrava o app no Windows).
 import * as cheerio from 'cheerio/slim'
+import { createHash } from 'crypto'
 import {
   CatalogGame,
   CatalogResult,
@@ -14,7 +15,13 @@ import {
 } from '../../shared/types'
 import { StoreService } from './store.service'
 import { groupCatalogGames } from './port-metadata.service'
+import { selectBestAsset } from './asset-selector'
 import recipesData from '../data/recipes.json'
+
+// Aumente quando mudar a forma de interpretar o HTML do PortsDR (invalida o hash de "página sem mudanças").
+const CATALOG_PARSER_VERSION = 3
+// Com cache local a atualização ao vivo espera a janela terminar de abrir (a lista já aparece pelo cache).
+const BACKGROUND_SYNC_DELAY_MS = 2500
 
 const CONSOLE_BADGE_MAP: Record<string, string> = {
   'Nintendo 64': 'N64',
@@ -357,6 +364,8 @@ export class CatalogService {
 
   private hasSyncedLiveThisSession = false
   private refreshPromise: Promise<CatalogResult> | null = null
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null
+  private groupedMemo: { key: string; games: CatalogGame[] } | null = null
   private updateListeners: ((result: CatalogResult) => void)[] = []
 
   public onUpdated(callback: (result: CatalogResult) => void): () => void {
@@ -368,21 +377,45 @@ export class CatalogService {
     }
   }
 
+  private emitUpdated(result: CatalogResult): void {
+    for (const listener of this.updateListeners) {
+      listener(result)
+    }
+  }
+
+  /** Prepara (recipes + agrupamento por jogo) os games do cache; o resultado é memorizado por versão do cache. */
+  private prepareGames(games: CatalogGame[], cacheKey: string): CatalogGame[] {
+    if (this.groupedMemo && this.groupedMemo.key === cacheKey) {
+      return this.groupedMemo.games
+    }
+    const grouped = groupCatalogGames(games.map((game) => this.attachRecipeInfo(game)))
+    this.groupedMemo = { key: cacheKey, games: grouped }
+    return grouped
+  }
+
+  private scheduleBackgroundSync(hasCache: boolean): void {
+    if (this.hasSyncedLiveThisSession || this.refreshPromise || this.refreshTimer) return
+    if (!hasCache) {
+      void this.refreshCatalog()
+      return
+    }
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null
+      void this.refreshCatalog()
+    }, BACKGROUND_SYNC_DELAY_MS)
+  }
+
   public async getCatalog(forceRefresh = false): Promise<CatalogResult> {
     if (forceRefresh) {
       return this.refreshCatalog()
     }
 
     const cached = this.store.getCatalogCache()
-    if (!this.hasSyncedLiveThisSession && !this.refreshPromise) {
-      void this.refreshCatalog()
-    }
+    this.scheduleBackgroundSync(cached.games.length > 0)
 
     if (cached.games.length > 0) {
-      const prepared = cached.games.map((game) => this.attachRecipeInfo(game))
-      const grouped = groupCatalogGames(prepared)
       return {
-        games: grouped,
+        games: this.prepareGames(cached.games, cached.lastUpdated),
         lastUpdated: cached.lastUpdated,
         source: 'cache'
       }
@@ -409,19 +442,33 @@ export class CatalogService {
   private async fetchLiveCatalog(): Promise<CatalogResult> {
     const cached = this.store.getCatalogCache()
     try {
-      const scrapedGames = await this.scrapePortsDR()
-      if (scrapedGames.length > 0) {
-        this.store.setCatalogCache(scrapedGames)
-        const prepared = scrapedGames.map((g) => this.attachRecipeInfo(g))
-        const grouped = groupCatalogGames(prepared)
-        const result: CatalogResult = {
-          games: grouped,
-          lastUpdated: new Date().toISOString(),
+      const html = await this.fetchPortsDRHtml()
+      const htmlHash = createHash('sha1')
+        .update(`v${CATALOG_PARSER_VERSION}:`)
+        .update(html)
+        .digest('hex')
+
+      // Mesma página de antes: nada a reprocessar, gravar ou reenviar para a interface
+      if (cached.games.length > 0 && htmlHash === this.store.getCatalogHtmlHash()) {
+        const now = new Date().toISOString()
+        this.emitUpdated({ games: [], lastUpdated: now, source: 'live', unchanged: true })
+        return {
+          games: this.prepareGames(cached.games, cached.lastUpdated),
+          lastUpdated: now,
           source: 'live'
         }
-        for (const listener of this.updateListeners) {
-          listener(result)
+      }
+
+      const scrapedGames = this.parsePortsDR(html)
+      if (scrapedGames.length > 0) {
+        this.store.setCatalogCache(scrapedGames, htmlHash)
+        const fresh = this.store.getCatalogCache()
+        const result: CatalogResult = {
+          games: this.prepareGames(scrapedGames, fresh.lastUpdated),
+          lastUpdated: fresh.lastUpdated,
+          source: 'live'
         }
+        this.emitUpdated(result)
         return result
       }
     } catch (err) {
@@ -429,10 +476,8 @@ export class CatalogService {
     }
 
     if (cached.games.length > 0) {
-      const prepared = cached.games.map((g) => this.attachRecipeInfo(g))
-      const grouped = groupCatalogGames(prepared)
       return {
-        games: grouped,
+        games: this.prepareGames(cached.games, cached.lastUpdated),
         lastUpdated: cached.lastUpdated,
         source: 'cache'
       }
@@ -445,9 +490,7 @@ export class CatalogService {
       lastUpdated: new Date().toISOString(),
       source: 'fallback'
     }
-    for (const listener of this.updateListeners) {
-      listener(result)
-    }
+    this.emitUpdated(result)
     return result
   }
 
@@ -470,9 +513,12 @@ export class CatalogService {
   }
 
   public async scrapePortsDR(): Promise<CatalogGame[]> {
+    return this.parsePortsDR(await this.fetchPortsDRHtml())
+  }
+
+  private async fetchPortsDRHtml(): Promise<string> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 8000)
-    let html: string
     try {
       const response = await fetch('https://portsdr.com/', {
         headers: {
@@ -485,11 +531,13 @@ export class CatalogService {
         throw new Error(`PortsDR returned HTTP ${response.status}`)
       }
 
-      html = await response.text()
+      return await response.text()
     } finally {
       clearTimeout(timeout)
     }
+  }
 
+  public parsePortsDR(html: string): CatalogGame[] {
     const $ = cheerio.load(html)
     const games: CatalogGame[] = []
     const seenIds = new Set<string>()
@@ -543,20 +591,20 @@ export class CatalogService {
 
       if (!title || !repoFullName) return
 
-      const platforms = platformsAttr
+      const rawPlatforms = platformsAttr
         .split('|')
         .map((p) => p.trim())
-        .filter((p): p is OSPlatform =>
-          ['Windows', 'Linux', 'macOS', 'Android'].includes(p)
-        )
-
-      // Exclude Android-only ports from the PC desktop catalog (future Android app will support them)
-      const hasDesktopPlatform = platforms.some((p) =>
-        ['Windows', 'Linux', 'macOS'].includes(p)
+        .filter(Boolean)
+      const platforms = rawPlatforms.filter((p): p is OSPlatform =>
+        ['Windows', 'Linux', 'macOS', 'Android'].includes(p)
       )
-      if (platforms.length > 0 && !hasDesktopPlatform) {
-        return
-      }
+
+      // O RecompHUB roda no Windows e no Linux: ports só de macOS, Android, iOS, Switch, Vita etc.
+      // não têm o que instalar aqui (antes eles apareciam como se fossem "Windows").
+      const runsOnPc =
+        rawPlatforms.length === 0 ||
+        rawPlatforms.some((p) => p === 'Windows' || p === 'Linux')
+      if (!runsOnPc) return
 
       const consoleBadge = CONSOLE_BADGE_MAP[originalPlatform] || originalPlatform
 
@@ -678,12 +726,11 @@ export class CatalogService {
       contentType: a.content_type || ''
     }))
 
-    const hostPlatform = process.platform
-    const selection = this.selectBestAssetForHost(
-      allAssets,
-      hostPlatform,
-      settings.preferNativeLinuxBuild
-    )
+    const selection = selectBestAsset(allAssets, {
+      platform: process.platform,
+      arch: process.arch,
+      preferNativeLinux: settings.preferNativeLinuxBuild
+    })
 
     return {
       repoFullName: usedRepo,
@@ -697,156 +744,6 @@ export class CatalogService {
       targetOs: selection.targetOs,
       requiresCompatibilityLayer: selection.requiresCompatibilityLayer,
       selectionReason: selection.reason
-    }
-  }
-
-  private selectBestAssetForHost(
-    assets: GitHubAsset[],
-    hostPlatform: string,
-    preferNativeLinux: boolean
-  ): {
-    asset: GitHubAsset | null
-    targetOs: 'linux' | 'windows' | 'macos'
-    requiresCompatibilityLayer: boolean
-    reason: string
-  } {
-    const usableAssets = assets.filter((a) => {
-      const n = a.name.toLowerCase()
-      if (
-        n.endsWith('.sha256') ||
-        n.endsWith('.md5') ||
-        n.endsWith('.sig') ||
-        n.endsWith('.asc') ||
-        n.endsWith('.pdb') ||
-        n.endsWith('.apk') ||
-        n.includes('symbols') ||
-        n.includes('debug-symbols')
-      ) {
-        return false
-      }
-      return true
-    })
-
-    if (usableAssets.length === 0) {
-      return {
-        asset: null,
-        targetOs: hostPlatform === 'win32' ? 'windows' : 'linux',
-        requiresCompatibilityLayer: false,
-        reason: 'Nenhum binário pré-compilado anexado a esta release.'
-      }
-    }
-
-    const isLinuxAsset = (name: string): boolean => {
-      const n = name.toLowerCase()
-      if (
-        n.includes('windows') ||
-        n.includes('win64') ||
-        n.includes('win32') ||
-        n.includes('macos') ||
-        n.includes('osx') ||
-        n.includes('darwin')
-      ) {
-        return false
-      }
-      return (
-        n.endsWith('.appimage') ||
-        n.includes('linux') ||
-        n.includes('ubuntu') ||
-        n.endsWith('.tar.gz') ||
-        n.endsWith('.tar.xz')
-      )
-    }
-
-    const isWindowsAsset = (name: string): boolean => {
-      const n = name.toLowerCase()
-      if (
-        n.includes('linux') ||
-        n.includes('macos') ||
-        n.includes('osx') ||
-        n.includes('darwin') ||
-        n.includes('android')
-      ) {
-        return false
-      }
-      if (n.includes('arm64') && process.arch !== 'arm64') {
-        return false
-      }
-      return (
-        n.includes('windows') ||
-        n.includes('win64') ||
-        n.includes('win32') ||
-        n.includes('win-') ||
-        n.includes('msvc') ||
-        n.endsWith('.exe') ||
-        n.endsWith('.zip') ||
-        n.endsWith('.rar') ||
-        n.endsWith('.7z')
-      )
-    }
-
-    if (hostPlatform === 'linux') {
-      if (preferNativeLinux) {
-        const linuxCandidates = usableAssets.filter((a) => isLinuxAsset(a.name))
-        if (linuxCandidates.length > 0) {
-          linuxCandidates.sort((a, b) => {
-            const score = (name: string): number => {
-              const n = name.toLowerCase()
-              let s = 0
-              if (n.includes('x86_64') || n.includes('amd64') || n.includes('x64')) s += 5
-              if (n.endsWith('.appimage')) s += 4
-              if (n.endsWith('.zip') || n.endsWith('.tar.gz')) s += 3
-              if (n.includes('arm64') || n.includes('aarch64')) s -= 10
-              return s
-            }
-            return score(b.name) - score(a.name)
-          })
-          return {
-            asset: linuxCandidates[0],
-            targetOs: 'linux',
-            requiresCompatibilityLayer: false,
-            reason: `Build nativa para Linux selecionada (${linuxCandidates[0].name})`
-          }
-        }
-      }
-
-      const winCandidates = usableAssets.filter((a) => isWindowsAsset(a.name))
-      if (winCandidates.length > 0) {
-        winCandidates.sort((a, b) => {
-          const score = (name: string): number => {
-            const n = name.toLowerCase()
-            let s = 0
-            if (n.includes('win64') || n.includes('x64') || n.includes('windows')) s += 5
-            if (n.endsWith('.zip')) s += 4
-            if (n.endsWith('.exe')) s += 2
-            return s
-          }
-          return score(b.name) - score(a.name)
-        })
-        return {
-          asset: winCandidates[0],
-          targetOs: 'windows',
-          requiresCompatibilityLayer: true,
-          reason: `Build Windows selecionada com camada de compatibilidade Proton/umu-run (${winCandidates[0].name})`
-        }
-      }
-    }
-
-    const winCandidates = usableAssets.filter((a) => isWindowsAsset(a.name))
-    if (winCandidates.length > 0) {
-      return {
-        asset: winCandidates[0],
-        targetOs: 'windows',
-        requiresCompatibilityLayer: hostPlatform === 'linux',
-        reason: `Build Windows selecionada (${winCandidates[0].name})`
-      }
-    }
-
-    return {
-      asset: usableAssets[0],
-      targetOs: hostPlatform === 'win32' ? 'windows' : 'linux',
-      requiresCompatibilityLayer:
-        usableAssets[0].name.toLowerCase().endsWith('.exe') && hostPlatform === 'linux',
-      reason: `Asset principal da release selecionado (${usableAssets[0].name})`
     }
   }
 

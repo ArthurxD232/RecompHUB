@@ -20,8 +20,11 @@
     "preview": "node scripts/ensure-electron.cjs && electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "dist:linux": "electron-vite build && electron-builder --linux AppImage tar.gz",
-    "dist:win": "electron-vite build && electron-builder --win zip portable",
-    "dist": "electron-vite build && electron-builder --linux AppImage tar.gz --win zip portable"
+    "dist:win": "electron-vite build && electron-builder --win zip nsis -c.compression=normal && electron-builder --win portable -c.compression=store",
+    "dist": "electron-vite build && electron-builder --linux AppImage tar.gz && electron-builder --win zip nsis -c.compression=normal && electron-builder --win portable -c.compression=store",
+    "test:assets": "node scripts/test-asset-selector.mjs",
+    "dev:web": "vite --config vite.web.config.ts",
+    "audit:catalog": "node scripts/audit-catalog.mjs --layout"
   },
   "build": {
     "appId": "com.recomphub.launcher",
@@ -53,8 +56,24 @@
       "icon": "build/icon.ico",
       "target": [
         "zip",
-        "portable"
+        "portable",
+        "nsis"
       ]
+    },
+    "electronLanguages": [
+      "en-US",
+      "pt-BR"
+    ],
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "RecompHUB",
+      "runAfterFinish": true,
+      "artifactName": "RecompHUB-beta-0.1-${os}-${arch}-Setup.${ext}"
     }
   },
   "dependencies": {

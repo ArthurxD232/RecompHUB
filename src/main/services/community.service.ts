@@ -20,9 +20,14 @@ export class CommunityService {
   private cachedPorts: CatalogGame[] = []
   private lastUpdated = ''
   private syncPromise: Promise<CommunityResult> | null = null
+  private syncTimer: ReturnType<typeof setTimeout> | null = null
+  private hasSyncedThisSession = false
+  // Assinatura do JSON atual: evita reprocessar e reenviar à interface uma lista idêntica
+  private rawSignature: string
 
   constructor(private store: StoreService) {
     // Initialize with bundled community ports
+    this.rawSignature = JSON.stringify(bundledCommunityPorts)
     this.cachedPorts = this.preparePorts(bundledCommunityPorts as CommunityPort[])
     this.lastUpdated = new Date().toISOString()
   }
@@ -39,9 +44,12 @@ export class CommunityService {
       return this.refreshFromRemote()
     }
 
-    if (!this.syncPromise && this.cachedPorts.length > 0) {
-      // Background sync without blocking
-      void this.refreshFromRemote().catch(() => {})
+    if (!this.syncPromise && !this.syncTimer && !this.hasSyncedThisSession) {
+      // Sincroniza em segundo plano depois que a janela já abriu
+      this.syncTimer = setTimeout(() => {
+        this.syncTimer = null
+        void this.refreshFromRemote().catch(() => {})
+      }, 3500)
     }
 
     return {
@@ -57,6 +65,7 @@ export class CommunityService {
     this.syncPromise = this.fetchRemoteCommunityPorts()
     return this.syncPromise.finally(() => {
       this.syncPromise = null
+      this.hasSyncedThisSession = true
     })
   }
 
@@ -75,9 +84,20 @@ export class CommunityService {
       if (response.ok) {
         const rawJson = (await response.json()) as CommunityPort[]
         if (Array.isArray(rawJson) && rawJson.length > 0) {
+          const signature = JSON.stringify(rawJson)
+          this.lastUpdated = new Date().toISOString()
+
+          if (signature === this.rawSignature) {
+            // Nada mudou desde o que já está carregado
+            for (const listener of this.updateListeners) {
+              listener({ ports: [], lastUpdated: this.lastUpdated, source: 'live', unchanged: true })
+            }
+            return { ports: this.cachedPorts, lastUpdated: this.lastUpdated, source: 'live' }
+          }
+
           const prepared = this.preparePorts(rawJson)
           this.cachedPorts = prepared
-          this.lastUpdated = new Date().toISOString()
+          this.rawSignature = signature
 
           const result: CommunityResult = {
             ports: prepared,

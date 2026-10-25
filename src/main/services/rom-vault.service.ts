@@ -50,7 +50,9 @@ const SUPPORTED_ROM_EXTENSIONS = new Set([
   '.gdi',
   '.dat',
   '.pak',
-  '.wad'
+  '.wad',
+  '.rsdk',
+  '.nkit'
 ])
 
 const COMPRESSED_ARCHIVE_EXTENSIONS = new Set([

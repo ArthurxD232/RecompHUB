@@ -9,6 +9,7 @@ import {
 } from '../../shared/types'
 import { StoreService } from './store.service'
 import { RomVaultService } from './rom-vault.service'
+import { isInstallerAsset } from './asset-selector'
 
 export interface RecipeExecutionResult {
   executablePath: string
@@ -90,7 +91,10 @@ export class RecipeService {
         continue
       }
 
-      const destPath = path.join(installDir, req.expectedFilename)
+      const destPath = path.join(
+        installDir,
+        req.keepOriginalName ? localEntry.fileName : req.expectedFilename
+      )
       try {
         const isN64Game =
           recipe.console === 'N64' ||
@@ -205,6 +209,12 @@ export class RecipeService {
         } catch {
           // Ignore
         }
+      }
+
+      if (isInstallerAsset(path.basename(execInfo.executablePath))) {
+        log(
+          `Aviso: "${path.basename(execInfo.executablePath)}" parece ser o instalador próprio deste port. Execute-o uma vez e depois use o botão de engrenagem para selecionar o executável do jogo instalado.`
+        )
       }
 
       log(
@@ -708,6 +718,23 @@ export class RecipeService {
       return {
         executablePath: exeFiles[0],
         requiresCompatibilityLayer: process.platform === 'linux'
+      }
+    }
+
+    // 3b. Windows: alguns ports (ex.: apps em Java) só trazem scripts .bat/.cmd de início
+    if (process.platform === 'win32') {
+      const scriptIgnored = /(setup|install|uninstall|update|optional|debug|build|clean)/i
+      const batFiles = allFiles.filter(
+        (f) => /\.(bat|cmd)$/i.test(f) && !isIgnored(f) && !scriptIgnored.test(path.basename(f))
+      )
+      if (batFiles.length > 0) {
+        const preferred = (f: string): number =>
+          /(run|start|launch|play)/i.test(path.basename(f)) ? 0 : 1
+        batFiles.sort(
+          (a, b) =>
+            preferred(a) - preferred(b) || a.split(path.sep).length - b.split(path.sep).length
+        )
+        return { executablePath: batFiles[0], requiresCompatibilityLayer: false }
       }
     }
 

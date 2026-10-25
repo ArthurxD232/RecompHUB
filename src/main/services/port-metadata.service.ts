@@ -451,81 +451,21 @@ const KNOWN_PORT_DETAILS: Record<string, CustomPortDetail> = {
       'Port nativo x86_64 preservando o controle analógico duplo lendário do PS1 com gráficos modernizados.'
   },
 
-  // --- Community GitHub Ports ---
-  'open-goal/jak-project': {
-    toolchainType: 'OpenGOAL (Compilador Nativo PS2 para x86_64)',
-    howItWorks:
-      'Engenharia reversa inovadora da linguagem GOAL criada pela Naughty Dog. O código é recompilado nativamente para arquiteturas x86_64 de PC sem necessidade de emulador.',
-    description:
-      'Port nativo para PC de Jak and Daxter hospedado no GitHub sugerido pela comunidade para trazer o clássico a 144+ FPS e telas Ultrawide.',
-    highlights: [
-      '144+ FPS destravado sem alterar a física',
-      'Suporte a monitores Widescreen e Ultrawide',
-      'Controles analógicos modernos com vibração',
-      'Carregamento instantâneo sem telas de espera'
-    ],
-    differences:
-      'Port oficial de código aberto no GitHub que expande a biblioteca do RecompHUB com suporte completo a mods e alta fidelidade.'
-  },
+  // --- Outros ports com metadados próprios ---
   'coop-deluxe/sm64coopdx': {
-    toolchainType: 'Descompilação C & Engine Port Nativo',
+    toolchainType: 'Descompilação C & Port Nativo (sm64ex-coop)',
     howItWorks:
-      'Port nativo de PC baseado na descompilação de Super Mario 64 com código C compilado diretamente para binários Windows e Linux com suporte a OpenGL/DirectX.',
+      'Fork do port nativo de PC de Super Mario 64, que é construído sobre a descompilação do jogo. Acrescenta multiplayer cooperativo online e uma API de mods em Lua.',
     description:
-      'Port nativo para PC de Super Mario 64 hospedado no GitHub, com suporte a 60 FPS, câmera analógica livre, texturas HD e modo cooperativo online.',
+      'Super Mario 64 para PC com multiplayer cooperativo online, mods em Lua, widescreen e FPS alto.',
     highlights: [
-      '60 FPS fluidos com câmera analógica livre',
-      'Multiplayer online cooperativo sincronizado',
-      'Widescreen nativo sem esticar a imagem',
-      'Suporte a mods e pacotes de texturas modernas'
+      'Multiplayer cooperativo online com sala própria',
+      'Mods em Lua e pacotes de personagens',
+      'Widescreen nativo e FPS alto',
+      'Câmera moderna e suporte a controles'
     ],
     differences:
-      'Port do GitHub com executáveis prontos e releases ativas, sugerido pela comunidade para jogar Mario 64 nativamente no PC.'
-  },
-  'diasurgical/devilutionx': {
-    toolchainType: 'Descompilação C++ & Engine SDL2',
-    howItWorks:
-      'Engenharia reversa e descompilação meticulosa do clássico Diablo 1 para C++ moderno, permitindo suporte nativo a hardware recente, telas widescreen e gamepads.',
-    description:
-      'Port nativo de Diablo 1 e Hellfire para computadores modernos hospedado no GitHub, com suporte a alta resolução, 60+ FPS e multiplayer via TCP/IP.',
-    highlights: [
-      'Suporte a resoluções Widescreen e 4K',
-      'Taxa de quadros destravada e áudio posicional 3D',
-      'Suporte nativo a gamepads modernos',
-      'Multiplayer moderno e compatibilidade com Hellfire'
-    ],
-    differences:
-      'Port open-source de alta fidelidade que permite jogar Diablo 1 nativamente no Windows e Linux sem dores de cabeça.'
-  },
-  'alexbatalov/fallout1-ce': {
-    toolchainType: 'Engenharia Reversa C++ & SDL2',
-    howItWorks:
-      'Re-implementação de código aberto do motor original de Fallout 1 para C++ moderno, eliminando bugs antigos e permitindo execução nativa fluida.',
-    description:
-      'Port comunitário para PC do clássico Fallout 1 hospedado no GitHub, oferecendo correção de bugs da engine original e suporte a monitores modernos.',
-    highlights: [
-      'Execução nativa no Windows e Linux sem emuladores',
-      'Correções de centenas de bugs do motor original',
-      'Interface escalável para telas modernas',
-      'Compatível com os saves e dados originais'
-    ],
-    differences:
-      'Substituição completa do executável original para uma experiência limpa e moderna sem travamentos.'
-  },
-  'openrct2/openrct2': {
-    toolchainType: 'Descompilação C++ & Engine Nativa',
-    howItWorks:
-      'Descompilação completa de RollerCoaster Tycoon 2 do Assembly original x86 para C++ multiplataforma com aceleração gráfica OpenGL.',
-    description:
-      'Port nativo definitivo de RollerCoaster Tycoon 2 hospedado no GitHub, com suporte a resoluções 4K, interface escalável e multiplayer online.',
-    highlights: [
-      'Suporte a 4K e interface com escala configurável',
-      'Multiplayer cooperativo online para construir parques juntos',
-      'Renderização acelerada por hardware via OpenGL',
-      'Carrega também todos os cenários e atrações do RCT1'
-    ],
-    differences:
-      'Um dos ports comunitários mais sofisticados do mundo open-source, expandindo o catálogo do launcher com suporte nativo total.'
+      'Pensado para jogar Mario 64 com amigos e para quem gosta de modar o jogo.'
   }
 }
 

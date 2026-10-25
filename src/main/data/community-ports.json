@@ -1,177 +1,312 @@
 [
   {
-    "id": "community__open-goal__jak-project__opengoal",
-    "title": "Jak and Daxter: The Precursor Legacy",
-    "projectName": "OpenGOAL",
-    "repoFullName": "open-goal/jak-project",
-    "githubUrl": "https://github.com/open-goal/jak-project",
-    "releaseUrl": "https://github.com/open-goal/jak-project/releases/latest",
-    "imageUrl": "https://opengraph.githubassets.com/1/open-goal/jak-project",
-    "console": "PlayStation 2",
-    "consoleBadge": "PS2",
-    "version": "v0.3.9",
-    "releaseStatus": "Latest",
-    "platforms": ["Windows", "Linux"],
-    "updatedAt": "2026-10-15T18:00:00Z",
-    "submittedBy": "@ArthurxD232",
-    "approvedAt": "2026-10-24T12:00:00Z",
-    "verificationLevel": "verified",
-    "toolchainType": "OpenGOAL (Compilador Nativo PS2 para x86_64)",
-    "howItWorks": "Engenharia reversa inovadora da linguagem GOAL criada pela Naughty Dog. O código é recompilado nativamente para arquiteturas x86_64 de PC sem necessidade de emulador.",
-    "description": "Port nativo para PC hospedado no GitHub sugerido pela comunidade para trazer Jak and Daxter com suporte a 144+ FPS e monitores Ultrawide.",
-    "highlights": [
-      "144+ FPS destravado sem alterar a física",
-      "Suporte a monitores Widescreen e Ultrawide",
-      "Controles analógicos modernos com vibração",
-      "Carregamento instantâneo sem telas de espera"
-    ],
-    "differences": "Port oficial de código aberto no GitHub que expande a biblioteca do RecompHUB com suporte completo a mods e alta fidelidade.",
-    "romRequirement": {
-      "id": "jak1_ps2_iso",
-      "label": "ISO original de Jak and Daxter (PS2)",
-      "type": "iso",
-      "expectedFilename": "jak1.iso",
-      "extensions": [".iso", ".bin"]
-    }
-  },
-  {
-    "id": "community__coop-deluxe__sm64coopdx__sm64coopdx",
-    "title": "Super Mario 64",
-    "projectName": "sm64coopdx",
-    "repoFullName": "coop-deluxe/sm64coopdx",
-    "githubUrl": "https://github.com/coop-deluxe/sm64coopdx",
-    "releaseUrl": "https://github.com/coop-deluxe/sm64coopdx/releases/latest",
-    "imageUrl": "https://opengraph.githubassets.com/1/coop-deluxe/sm64coopdx",
+    "id": "community__thegh0stship__battletanx-global-assault-pc-port",
+    "title": "BattleTanx: Global Assault",
+    "projectName": "BattleTanx GA PC Port",
+    "repoFullName": "TheGh0stShip/BattleTanx-Global-Assault-PC-Port",
+    "githubUrl": "https://github.com/TheGh0stShip/BattleTanx-Global-Assault-PC-Port",
+    "releaseUrl": "https://github.com/TheGh0stShip/BattleTanx-Global-Assault-PC-Port/releases/latest",
     "console": "Nintendo 64",
     "consoleBadge": "N64",
-    "version": "v1.5.1",
+    "version": "v0.2.5",
     "releaseStatus": "Latest",
-    "platforms": ["Windows", "Linux"],
-    "updatedAt": "2026-10-10T14:30:00Z",
-    "submittedBy": "@LucasSchaefer09",
-    "approvedAt": "2026-10-24T12:00:00Z",
-    "verificationLevel": "verified",
-    "toolchainType": "Descompilação C & Engine Port Nativo",
-    "howItWorks": "Port nativo de PC baseado na descompilação de Super Mario 64 com código C compilado diretamente para binários Windows e Linux com suporte a OpenGL/DirectX.",
-    "description": "Port nativo para PC de Super Mario 64 hospedado no GitHub, com suporte a 60 FPS, câmera analógica livre, texturas HD e modo cooperativo online.",
-    "highlights": [
-      "60 FPS fluidos com câmera analógica livre",
-      "Multiplayer online cooperativo sincronizado",
-      "Widescreen nativo sem esticar a imagem",
-      "Suporte a mods e pacotes de texturas modernas"
+    "platforms": [
+      "Windows"
     ],
-    "differences": "Port do GitHub com executáveis prontos e releases ativas, sugerido pela comunidade para jogar Mario 64 nativamente no PC.",
-    "romRequirement": {
-      "id": "sm64_us_rom",
-      "label": "ROM original de Super Mario 64 (USA) (.z64)",
-      "type": "rom",
-      "expectedFilename": "baserom.us.z64",
-      "extensions": [".z64", ".n64", ".v64"]
+    "updatedAt": "2026-10-13T00:00:00Z",
+    "submittedBy": "Curadoria RecompHUB",
+    "approvedAt": "2026-10-24T20:00:00Z",
+    "verificationLevel": "community",
+    "inferredFamily": "N64Recomp",
+    "toolchainType": "Recompilação Estática (N64Recomp + RT64) a partir de descompilação",
+    "howItWorks": "Construído sobre a descompilação completa do jogo: N64Recomp traduz o código da CPU, RSPRecomp o microcódigo de áudio e o RT64 desenha o jogo em Direct3D 12. Não é um emulador embutido.",
+    "description": "Port nativo de BattleTanx: Global Assault para Windows (no Linux roda via Proton/umu-run). O pacote não inclui a ROM.",
+    "highlights": [
+      "Proporções 4:3, 16:9, 16:10, 21:9 e 32:9",
+      "Teclado e controles SDL, com rumble",
+      "Controller Pak em arquivos .mpk compatíveis com emuladores",
+      "Mods opcionais: sem neblina e mira independente da torre",
+      "Multiplayer em rede (experimental)"
+    ],
+    "differences": "Pacote portátil só para Windows. Funciona com a ROM USA Rev 0 em formato Big-Endian (.z64).",
+    "recipe": {
+      "id": "community_battletanx-ga-pc-port",
+      "repoFullName": "TheGh0stShip/BattleTanx-Global-Assault-PC-Port",
+      "title": "BattleTanx: Global Assault (BattleTanx GA PC Port)",
+      "console": "N64",
+      "family": "N64Recomp",
+      "createPortableTxt": true,
+      "executableHints": [
+        "BattleTanxGA.exe"
+      ],
+      "launchArgs": [
+        "{ROM_PATH}"
+      ],
+      "requirements": [
+        {
+          "id": "battletanx_ga_us_rev0",
+          "label": "BattleTanx: Global Assault (USA) Rev 0 (.z64)",
+          "type": "rom",
+          "expectedFilename": "battletanx_ga.us.z64",
+          "extensions": [
+            ".z64",
+            ".n64",
+            ".v64"
+          ],
+          "region": "USA"
+        }
+      ],
+      "notes": "A ROM é pareada na pasta do jogo e entregue direto ao BattleTanxGA.exe (o port a valida e lembra do caminho)."
     }
   },
   {
-    "id": "community__diasurgical__devilutionx__devilutionx",
-    "title": "Diablo",
-    "projectName": "DevilutionX",
-    "repoFullName": "diasurgical/devilutionX",
-    "githubUrl": "https://github.com/diasurgical/devilutionX",
-    "releaseUrl": "https://github.com/diasurgical/devilutionX/releases/latest",
-    "imageUrl": "https://opengraph.githubassets.com/1/diasurgical/devilutionX",
-    "console": "PC / Outros",
-    "consoleBadge": "PC / Outros",
-    "version": "1.5.5",
+    "id": "community__danielgomesvieira2000__body-harvest-recomp",
+    "title": "Body Harvest",
+    "projectName": "Body Harvest: Recompiled",
+    "repoFullName": "danielgomesvieira2000/body-harvest-recomp",
+    "githubUrl": "https://github.com/danielgomesvieira2000/body-harvest-recomp",
+    "releaseUrl": "https://github.com/danielgomesvieira2000/body-harvest-recomp/releases/latest",
+    "console": "Nintendo 64",
+    "consoleBadge": "N64",
+    "version": "v0.1.0",
     "releaseStatus": "Latest",
-    "platforms": ["Windows", "Linux"],
-    "updatedAt": "2026-09-12T10:15:00Z",
-    "submittedBy": "@RetroFan",
-    "approvedAt": "2026-10-24T12:00:00Z",
-    "verificationLevel": "verified",
-    "toolchainType": "Descompilação C++ & Engine SDL2",
-    "howItWorks": "Engenharia reversa e descompilação meticulosa do clássico Diablo 1 para C++ moderno, permitindo suporte nativo a hardware recente, telas widescreen e gamepads.",
-    "description": "Port nativo de Diablo 1 e Hellfire para computadores modernos hospedado no GitHub, com suporte a alta resolução, 60+ FPS e multiplayer via TCP/IP.",
-    "highlights": [
-      "Suporte a resoluções Widescreen e 4K",
-      "Taxa de quadros destravada e áudio posicional 3D",
-      "Suporte nativo a gamepads modernos",
-      "Multiplayer moderno e compatibilidade com Hellfire"
+    "platforms": [
+      "Windows",
+      "Linux"
     ],
-    "differences": "Port open-source de alta fidelidade que permite jogar Diablo 1 nativamente no Windows e Linux sem dores de cabeça.",
-    "romRequirement": {
-      "id": "diablo_mpq",
-      "label": "Arquivo DIABDAT.MPQ do CD ou instalação original do Diablo",
-      "type": "iso",
-      "expectedFilename": "DIABDAT.MPQ",
-      "extensions": [".mpq", ".iso", ".zip"]
+    "updatedAt": "2026-09-17T00:00:00Z",
+    "submittedBy": "Curadoria RecompHUB",
+    "approvedAt": "2026-10-24T20:00:00Z",
+    "verificationLevel": "community",
+    "inferredFamily": "N64Recomp",
+    "toolchainType": "Recompilação Estática (N64Recomp + RT64)",
+    "howItWorks": "O jogo de N64 é recompilado estaticamente com o N64Recomp e renderizado pelo RT64. Você fornece a sua ROM USA e escolhe o arquivo no launcher do port.",
+    "description": "Port nativo de Body Harvest (DMA Design) com widescreen real, alto FPS e launcher com opções gráficas, de som e controles. Versão inicial: ainda pouco testada.",
+    "highlights": [
+      "Widescreen que realmente mostra mais do mundo",
+      "Alto FPS, até a taxa de atualização do monitor",
+      "Teclado e controles, com remapeamento e suporte a mods",
+      "Saves EEPROM e Rumble Pak",
+      "HUD ancorado nas bordas da tela"
+    ],
+    "differences": "Projeto novo e em fase inicial (0.1.0): inicia e joga o começo da Grécia; o resto do jogo ainda não foi totalmente testado.",
+    "recipe": {
+      "id": "community_body-harvest-recomp",
+      "repoFullName": "danielgomesvieira2000/body-harvest-recomp",
+      "title": "Body Harvest (Body Harvest: Recompiled)",
+      "console": "N64",
+      "family": "N64Recomp",
+      "createPortableTxt": true,
+      "executableHints": [
+        "body-harvest-recomp.sh",
+        "body-harvest-recomp.exe",
+        "body-harvest-recomp"
+      ],
+      "requirements": [
+        {
+          "id": "bodyharvest_us",
+          "label": "Body Harvest (USA) (.z64, .n64, .v64 ou .zip)",
+          "type": "rom",
+          "expectedFilename": "bodyharvest.us.z64",
+          "sha1": [
+            "bbb6666f5014a473747ee4145f036d9fb25d7348"
+          ],
+          "extensions": [
+            ".z64",
+            ".n64",
+            ".v64"
+          ],
+          "region": "USA"
+        }
+      ],
+      "notes": "Somente a versão USA funciona. No Linux o port é aberto pelo script body-harvest-recomp.sh."
     }
   },
   {
-    "id": "community__alexbatalov__fallout1-ce__fallout1-ce",
-    "title": "Fallout: A Post Nuclear Role Playing Game",
-    "projectName": "Fallout-CE",
-    "repoFullName": "alexbatalov/fallout1-ce",
-    "githubUrl": "https://github.com/alexbatalov/fallout1-ce",
-    "releaseUrl": "https://github.com/alexbatalov/fallout1-ce/releases/latest",
-    "imageUrl": "https://opengraph.githubassets.com/1/alexbatalov/fallout1-ce",
-    "console": "PC / Outros",
-    "consoleBadge": "PC / Outros",
-    "version": "v1.1.0",
+    "id": "community__dahsidiabdallah__conkerbfdreloaded",
+    "title": "Conker's Bad Fur Day",
+    "projectName": "Conker's Bad Fur Day: Reloaded",
+    "repoFullName": "DahSidiAbdallah/ConkerBFDReloaded",
+    "githubUrl": "https://github.com/DahSidiAbdallah/ConkerBFDReloaded",
+    "releaseUrl": "https://github.com/DahSidiAbdallah/ConkerBFDReloaded/releases/latest",
+    "imageUrl": "https://raw.githubusercontent.com/DahSidiAbdallah/ConkerBFDReloaded/HEAD/docs/logo.png",
+    "console": "Nintendo 64",
+    "consoleBadge": "N64",
+    "version": "v1.4.6",
     "releaseStatus": "Latest",
-    "platforms": ["Windows", "Linux"],
-    "updatedAt": "2026-08-30T16:00:00Z",
-    "submittedBy": "@WastelandWanderer",
-    "approvedAt": "2026-10-24T12:00:00Z",
-    "verificationLevel": "verified",
-    "toolchainType": "Engenharia Reversa C++ & SDL2",
-    "howItWorks": "Re-implementação de código aberto do motor original de Fallout 1 para C++ moderno, eliminando bugs antigos e permitindo execução nativa fluida.",
-    "description": "Port comunitário para PC do clássico Fallout 1 hospedado no GitHub, oferecendo correção de bugs da engine original e suporte a monitores modernos.",
-    "highlights": [
-      "Execução nativa no Windows e Linux sem emuladores",
-      "Correções de centenas de bugs do motor original",
-      "Interface escalável para telas modernas",
-      "Compatível com os saves e dados originais"
+    "platforms": [
+      "Windows",
+      "Linux"
     ],
-    "differences": "Substituição completa do executável original para uma experiência limpa e moderna sem travamentos.",
-    "romRequirement": {
-      "id": "fallout1_data",
-      "label": "Pasta ou arquivos master.dat e critter.dat da instalação do Fallout 1",
-      "type": "iso",
-      "expectedFilename": "master.dat",
-      "extensions": [".dat", ".zip", ".iso"]
+    "updatedAt": "2026-10-23T00:00:00Z",
+    "submittedBy": "Curadoria RecompHUB",
+    "approvedAt": "2026-10-24T20:00:00Z",
+    "verificationLevel": "community",
+    "inferredFamily": "N64Recomp",
+    "toolchainType": "Recompilação Estática (N64Recomp + RT64)",
+    "howItWorks": "O jogo de N64 é recompilado estaticamente com o N64: Recompiled e desenhado pelo RT64. Roda nativo no PC, em velocidade total, e lê a sua ROM original (ela não vem no pacote).",
+    "description": "Port nativo de Conker's Bad Fur Day com um modo Classic fiel ao N64 e um modo Modern com tudo o que é novo.",
+    "highlights": [
+      "Classic (4:3, 30 fps) ou Modern (widescreen, FPS da tela, câmera livre)",
+      "Widescreen sem barras pretas, inclusive em cutscenes e menus",
+      "Mira twin-stick, mouse, teclado e giroscópio",
+      "Suporte a mods, texturas HD e tradução para francês",
+      "Funciona no Steam Deck"
+    ],
+    "differences": "Alternativa ao CBFD-Recompiled do PortsDR: mesma base N64Recomp, com modos Classic/Modern e muitas opções de qualidade de vida.",
+    "recipe": {
+      "id": "community_conkerbfdreloaded",
+      "repoFullName": "DahSidiAbdallah/ConkerBFDReloaded",
+      "title": "Conker's Bad Fur Day (Conker's Bad Fur Day: Reloaded)",
+      "console": "N64",
+      "family": "N64Recomp",
+      "createPortableTxt": true,
+      "executableHints": [
+        "ConkerBFDReloaded.exe",
+        "ConkerBFDReloaded"
+      ],
+      "requirements": [
+        {
+          "id": "conker_us",
+          "label": "Conker's Bad Fur Day (USA) (.z64)",
+          "type": "rom",
+          "expectedFilename": "conker.us.z64",
+          "sha1": [
+            "4cbadd3c4e0729dec46af64ad018050eada4f47a"
+          ],
+          "extensions": [
+            ".z64",
+            ".n64",
+            ".v64"
+          ],
+          "region": "USA"
+        }
+      ],
+      "notes": "A ROM USA é pareada como conker.us.z64 (convertida para Big-Endian se preciso). No primeiro uso, escolha-a também na janela do jogo."
     }
   },
   {
-    "id": "community__openrct2__openrct2__openrct2",
-    "title": "RollerCoaster Tycoon 2",
-    "projectName": "OpenRCT2",
-    "repoFullName": "OpenRCT2/OpenRCT2",
-    "githubUrl": "https://github.com/OpenRCT2/OpenRCT2",
-    "releaseUrl": "https://github.com/OpenRCT2/OpenRCT2/releases/latest",
-    "imageUrl": "https://opengraph.githubassets.com/1/OpenRCT2/OpenRCT2",
-    "console": "PC / Outros",
-    "consoleBadge": "PC / Outros",
-    "version": "v0.5.6",
+    "id": "community__odrannnn__metroidprimeport",
+    "title": "Metroid Prime",
+    "projectName": "Metroid Prime Port",
+    "repoFullName": "Odrannnn/MetroidPrimePort",
+    "githubUrl": "https://github.com/Odrannnn/MetroidPrimePort",
+    "releaseUrl": "https://github.com/Odrannnn/MetroidPrimePort/releases/latest",
+    "console": "GameCube",
+    "consoleBadge": "GameCube",
+    "version": "v0.32.0",
     "releaseStatus": "Latest",
-    "platforms": ["Windows", "Linux"],
-    "updatedAt": "2026-10-02T19:00:00Z",
-    "submittedBy": "@TycoonBuilder",
-    "approvedAt": "2026-10-24T12:00:00Z",
-    "verificationLevel": "verified",
-    "toolchainType": "Descompilação C++ & Engine Nativa",
-    "howItWorks": "Descompilação completa de RollerCoaster Tycoon 2 do Assembly original x86 para C++ multiplataforma com aceleração gráfica OpenGL.",
-    "description": "Port nativo definitivo de RollerCoaster Tycoon 2 hospedado no GitHub, com suporte a resoluções 4K, interface escalável e multiplayer online.",
-    "highlights": [
-      "Suporte a 4K e interface com escala configurável",
-      "Multiplayer cooperativo online para construir parques juntos",
-      "Renderização acelerada por hardware via OpenGL",
-      "Carrega também todos os cenários e atrações do RCT1"
+    "platforms": [
+      "Windows",
+      "Linux"
     ],
-    "differences": "Um dos ports comunitários mais sofisticados do mundo open-source, expandindo o catálogo do launcher com suporte nativo total.",
-    "romRequirement": {
-      "id": "rct2_data",
-      "label": "Pasta ou arquivo .zip com os arquivos originais do RollerCoaster Tycoon 2",
-      "type": "iso",
-      "expectedFilename": "g1.dat",
-      "extensions": [".dat", ".zip", ".iso"]
+    "updatedAt": "2026-10-22T00:00:00Z",
+    "submittedBy": "Curadoria RecompHUB",
+    "approvedAt": "2026-10-24T20:00:00Z",
+    "verificationLevel": "community",
+    "inferredFamily": "GenericNative",
+    "toolchainType": "Descompilação (PrimeDecomp) + Engine Aurora (SDL3/WebGPU)",
+    "howItWorks": "O código do jogo vem da descompilação PrimeDecomp (que reproduz o original byte a byte) e é compilado nativamente para o PC. A renderização usa o Aurora (SDL3/WebGPU). Não há emulador: você aponta a sua imagem de disco e o port nunca distribui assets.",
+    "description": "Port nativo de Metroid Prime (GameCube) para Windows e Linux, com widescreen, FPS destravado, controles modernos e dezenas de opções extras.",
+    "highlights": [
+      "Widescreen com HUD de ponta a ponta e FPS destravado",
+      "Mouse + mira twin-stick, giroscópio e remapeamento completo",
+      "Importa e exporta saves do GameCube (USA/PAL), Wii Trilogy e Dolphin",
+      "Randomizer e multiworld Archipelago embutidos",
+      "Modo foto, texturas HD e cutscenes puláveis"
+    ],
+    "differences": "Port nativo (não é emulador) feito a partir da descompilação do jogo. Aceita os discos GameCube USA 1.00, 1.01, 1.02 e PAL.",
+    "recipe": {
+      "id": "community_metroidprimeport",
+      "repoFullName": "Odrannnn/MetroidPrimePort",
+      "title": "Metroid Prime (Metroid Prime Port)",
+      "console": "GameCube",
+      "family": "GenericNative",
+      "createPortableTxt": false,
+      "executableHints": [
+        "metroid_prime_port.exe",
+        "MetroidPrime-x86_64.AppImage",
+        "metroid_prime_port"
+      ],
+      "launchArgs": [
+        "{ROM_PATH}"
+      ],
+      "requirements": [
+        {
+          "id": "mp1_gc_disc",
+          "label": "Disco GameCube de Metroid Prime (USA 1.00 / 1.01 / 1.02 ou PAL) — .iso, .gcm, .rvz, .wbfs, .ciso ou .nkit",
+          "type": "iso",
+          "expectedFilename": "metroid_prime.iso",
+          "extensions": [
+            ".iso",
+            ".gcm",
+            ".rvz",
+            ".wbfs",
+            ".ciso",
+            ".nkit"
+          ],
+          "keepOriginalName": true
+        }
+      ],
+      "notes": "A imagem do disco é pareada na pasta do jogo e passada direto ao executável na hora de jogar."
+    }
+  },
+  {
+    "id": "community__rsdkmodding__rsdkv3-decompilation",
+    "title": "Sonic CD",
+    "projectName": "Sonic CD (RSDKv3 Decompilation)",
+    "repoFullName": "RSDKModding/RSDKv3-Decompilation",
+    "githubUrl": "https://github.com/RSDKModding/RSDKv3-Decompilation",
+    "releaseUrl": "https://github.com/RSDKModding/RSDKv3-Decompilation/releases/latest",
+    "imageUrl": "https://raw.githubusercontent.com/RSDKModding/RSDKv3-Decompilation/HEAD/header.png",
+    "console": "Sega CD",
+    "consoleBadge": "Sega CD",
+    "version": "1.3.3",
+    "releaseStatus": "Latest",
+    "platforms": [
+      "Windows",
+      "Linux",
+      "macOS"
+    ],
+    "updatedAt": "2025-11-02T00:00:00Z",
+    "submittedBy": "Curadoria RecompHUB",
+    "approvedAt": "2026-10-24T20:00:00Z",
+    "verificationLevel": "community",
+    "inferredFamily": "GenericNative",
+    "toolchainType": "Descompilação completa da Retro Engine v3",
+    "howItWorks": "A Retro Engine v3 (a engine do Sonic CD de 2011) foi descompilada para C++ e roda nativamente em PC. A engine lê o arquivo Data.rsdk da sua cópia oficial do jogo.",
+    "description": "Descompilação completa da engine do Sonic CD: imagem nítida em pixel perfeito, controles remapeáveis, mod loader e suporte aos scripts atualizados do mobile.",
+    "highlights": [
+      "Exibição nítida, pixel a pixel",
+      "Controles totalmente remapeáveis pelo settings.ini",
+      "Mod loader e API de mods embutidos",
+      "Recursos de debug do Sonic Mania portados para o menu de desenvolvedor",
+      "Versão nativa x64 para Windows e build para Linux"
+    ],
+    "differences": "Exige o Data.rsdk da sua cópia oficial do Sonic CD (Steam, Epic, Sonic Origins ou mobile). Nenhum asset do jogo é distribuído.",
+    "recipe": {
+      "id": "community_rsdkv3-decompilation",
+      "repoFullName": "RSDKModding/RSDKv3-Decompilation",
+      "title": "Sonic CD (RSDKv3 Decompilation)",
+      "console": "Sega CD",
+      "family": "GenericNative",
+      "createPortableTxt": false,
+      "executableHints": [
+        "RSDKv3.exe",
+        "RSDKv3"
+      ],
+      "requirements": [
+        {
+          "id": "soniccd_data_rsdk",
+          "label": "Data.rsdk da sua cópia oficial do Sonic CD",
+          "type": "rom",
+          "expectedFilename": "Data.rsdk",
+          "extensions": [
+            ".rsdk"
+          ]
+        }
+      ],
+      "notes": "O Data.rsdk é pareado ao lado do executável da engine. Veja rsdkmodding.com para extrair o arquivo da sua cópia."
     }
   }
 ]

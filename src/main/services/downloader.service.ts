@@ -13,6 +13,7 @@ import { StoreService } from './store.service'
 import { CatalogService } from './catalog.service'
 import { RomVaultService } from './rom-vault.service'
 import { RecipeService } from './recipe.service'
+import { isInstallerAsset } from './asset-selector'
 
 export class DownloaderService {
   private tasks = new Map<string, DownloadTaskProgress>()
@@ -173,6 +174,7 @@ export class DownloaderService {
           romPaired: recipeRes.romPaired,
           pairedRomPaths: recipeRes.pairedRomPaths,
           portableMode: recipeRes.portableMode,
+          launchArgs: game.recipe?.launchArgs ?? installed.launchArgs,
           recipeLogs: [...installed.recipeLogs, ...recipeRes.logs]
         })
         this.emitLibraryUpdated()
@@ -244,11 +246,16 @@ export class DownloaderService {
     const release = await this.catalog.resolveRelease(game)
     if (!release.selectedAsset) {
       throw new Error(
-        `A release ${release.tagName} de ${release.repoFullName} não possui arquivos binários pré-compilados anexados.`
+        `${release.selectionReason} (release ${release.tagName} de ${release.repoFullName}).`
       )
     }
 
     log(`Release localizada: ${release.tagName} — ${release.selectionReason}`)
+    if (isInstallerAsset(release.selectedAsset.name)) {
+      log(
+        `Aviso: "${release.selectedAsset.name}" é um instalador próprio do port (não o jogo já pronto). Depois de instalar, selecione o executável do jogo manualmente.`
+      )
+    }
 
     const settings = this.store.getSettings()
     const folderSlug = `${game.projectName}_${game.id}`
@@ -311,6 +318,7 @@ export class DownloaderService {
       installDir,
       log
     )
+    await this.extractNestedArchivesIfNeeded(installDir, log)
 
     try {
       if (fs.existsSync(downloadedArchivePath)) {
@@ -359,6 +367,7 @@ export class DownloaderService {
       romPaired: recipeResult.romPaired,
       pairedRomPaths: recipeResult.pairedRomPaths,
       portableMode: recipeResult.portableMode,
+      launchArgs: game.recipe?.launchArgs,
       playTimeSeconds: 0,
       installedAt: new Date().toISOString(),
       recipeLogs: recipeResult.logs
@@ -424,6 +433,45 @@ export class DownloaderService {
       }
     } finally {
       await new Promise<void>((resolve) => fileStream.end(resolve))
+    }
+  }
+
+  /**
+   * Alguns releases vêm "embrulhados" (ex.: um .zip que só contém um linux.tar.gz).
+   * Se depois da extração não existir nenhum executável, extrai os pacotes internos.
+   */
+  private async extractNestedArchivesIfNeeded(
+    installDir: string,
+    log: (m: string) => void
+  ): Promise<void> {
+    if (this.recipeService.findMainExecutable(installDir).executablePath) return
+
+    const nestedPattern = /\.(zip|7z|rar|tar\.gz|tgz|tar\.xz)$/i
+    const nested: string[] = []
+    const walk = (dir: string, depth: number): void => {
+      if (depth > 2) return
+      let entries: fs.Dirent[] = []
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) walk(full, depth + 1)
+        else if (nestedPattern.test(entry.name)) nested.push(full)
+      }
+    }
+    walk(installDir, 0)
+
+    for (const archive of nested) {
+      log(`Pacote interno encontrado (${path.basename(archive)}); extraindo...`)
+      try {
+        await this.extractOrPlaceAsset(archive, path.basename(archive), path.dirname(archive), log)
+        fs.unlinkSync(archive)
+      } catch (err: any) {
+        log(`Aviso ao extrair pacote interno ${path.basename(archive)}: ${err?.message || err}`)
+      }
     }
   }
 

@@ -248,6 +248,7 @@ export function registerIpcHandlers(
       romPaired: recipeRes.romPaired,
       pairedRomPaths: recipeRes.pairedRomPaths,
       portableMode: recipeRes.portableMode,
+      launchArgs: game.recipe?.launchArgs ?? installed.launchArgs,
       recipeLogs: recipeRes.logs
     }
     store.upsertInstalledGame(updated)
