@@ -1,7 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { spawn } from 'child_process'
-import AdmZip from 'adm-zip'
 import * as tar from 'tar'
 import {
   CatalogGame,
@@ -14,6 +13,7 @@ import { CatalogService } from './catalog.service'
 import { RomVaultService } from './rom-vault.service'
 import { RecipeService } from './recipe.service'
 import { isInstallerAsset } from './asset-selector'
+import { ensureFreeSpace, extractZipStreaming } from './archive.service'
 
 export class DownloaderService {
   private tasks = new Map<string, DownloadTaskProgress>()
@@ -115,7 +115,7 @@ export class DownloaderService {
       consoleBadge: game.consoleBadge,
       imageUrl: game.imageUrl,
       stage: 'EXTRACTING_ISO',
-      stageLabel: `Descompactando / Validando ISO: ${path.basename(pickedRomPath)}...`,
+      stageLabel: `Preparando arquivo: ${path.basename(pickedRomPath)}...`,
       portProgress: 0,
       overallProgress: 2,
       downloadedBytes: 0,
@@ -174,6 +174,7 @@ export class DownloaderService {
           romPaired: recipeRes.romPaired,
           pairedRomPaths: recipeRes.pairedRomPaths,
           portableMode: recipeRes.portableMode,
+          pairedPatchPaths: recipeRes.pairedPatchPaths,
           launchArgs: game.recipe?.launchArgs ?? installed.launchArgs,
           recipeLogs: [...installed.recipeLogs, ...recipeRes.logs]
         })
@@ -275,6 +276,15 @@ export class DownloaderService {
     const assetFileName = release.selectedAsset.name
     const downloadedArchivePath = path.join(tempDir, `${taskId}_${assetFileName}`)
 
+    // O arquivo baixado e a pasta extraída existem ao mesmo tempo: calcula com folga
+    if (release.selectedAsset.size > 0) {
+      await ensureFreeSpace(
+        settings.installRootPath,
+        release.selectedAsset.size * 2 + 256 * 1024 * 1024,
+        `instalar ${assetFileName}`
+      )
+    }
+
     // Step 2: Download Port from GitHub
     task.stage = 'DOWNLOADING_PORT'
     task.stageLabel = `Baixando port: ${assetFileName}...`
@@ -316,7 +326,12 @@ export class DownloaderService {
       downloadedArchivePath,
       assetFileName,
       installDir,
-      log
+      log,
+      (pct) => {
+        task.stageLabel = `Extraindo ${assetFileName} (${pct}%)...`
+        task.overallProgress = 84 + Math.round(pct * 0.07)
+        this.emitProgress(task)
+      }
     )
     await this.extractNestedArchivesIfNeeded(installDir, log)
 
@@ -367,6 +382,7 @@ export class DownloaderService {
       romPaired: recipeResult.romPaired,
       pairedRomPaths: recipeResult.pairedRomPaths,
       portableMode: recipeResult.portableMode,
+      pairedPatchPaths: recipeResult.pairedPatchPaths,
       launchArgs: game.recipe?.launchArgs,
       playTimeSeconds: 0,
       installedAt: new Date().toISOString(),
@@ -419,7 +435,10 @@ export class DownloaderService {
         const { done, value } = await reader.read()
         if (done) break
         if (value) {
-          fileStream.write(Buffer.from(value))
+          // Respeita o ritmo do disco: sem isso, um download de vários GB acumularia tudo na memória
+          if (!fileStream.write(Buffer.from(value))) {
+            await new Promise<void>((resolve) => fileStream.once('drain', () => resolve()))
+          }
           receivedBytes += value.byteLength
 
           const now = Date.now()
@@ -479,14 +498,17 @@ export class DownloaderService {
     archivePath: string,
     originalAssetName: string,
     installDir: string,
-    log: (m: string) => void
+    log: (m: string) => void,
+    onPercent?: (pct: number) => void
   ): Promise<void> {
     const lower = originalAssetName.toLowerCase()
 
     if (lower.endsWith('.zip')) {
       log(`Descompactando arquivo ZIP: ${originalAssetName}`)
-      const zip = new AdmZip(archivePath)
-      zip.extractAllTo(installDir, true)
+      // Em fluxo: aceita zips acima de 2 GB e não trava a interface durante a extração
+      await extractZipStreaming(archivePath, installDir, {
+        onProgress: (p) => onPercent?.(p.percent)
+      })
       return
     }
 

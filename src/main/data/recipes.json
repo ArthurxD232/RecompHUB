@@ -450,5 +450,24 @@
       }
     ],
     "notes": "Executa o binário extractor via CLI passando a ISO do PS2 para descompilar e gerar iso_data."
+  },
+  {
+    "id": "bloodborne_pc",
+    "repoFullName": "Supermedo/bloodborne_pc",
+    "title": "Bloodborne (Bloodborne for Windows)",
+    "console": "PS4",
+    "family": "GenericNative",
+    "createPortableTxt": false,
+    "executableHints": ["Bloodborne.exe"],
+    "requirements": [
+      {
+        "id": "bloodborne_dump",
+        "label": "Dump descriptografado do Bloodborne, versão 1.09 (pasta com eboot.bin) — CUSA03173",
+        "type": "folder",
+        "expectedFilename": "game_dump",
+        "extensions": [".pkg", ".zip", ".7z", ".rar"]
+      }
+    ],
+    "notes": "Escolha a PASTA do dump (a que contém o eboot.bin), de preferência já com a atualização 1.09: os patches da comunidade (60/90 FPS, resolução, efeitos) exigem a 1.09. Na primeira abertura o launcher do Bloodborne pergunta a pasta do jogo: use o atalho game_dump criado dentro da pasta de instalação. DLC (pastas SPEXPANSIONDLC03...) podem ser adicionadas em Patches, atualizações e DLC."
   }
 ]

@@ -24,7 +24,8 @@
     "dist": "electron-vite build && electron-builder --linux AppImage tar.gz && electron-builder --win zip nsis -c.compression=normal && electron-builder --win portable -c.compression=store",
     "test:assets": "node scripts/test-asset-selector.mjs",
     "dev:web": "vite --config vite.web.config.ts",
-    "audit:catalog": "node scripts/audit-catalog.mjs --layout"
+    "audit:catalog": "node scripts/audit-catalog.mjs --layout",
+    "test:vault": "node scripts/test-vault.mjs"
   },
   "build": {
     "appId": "com.recomphub.launcher",
@@ -84,7 +85,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.5.4",
-    "tar": "^7.4.3"
+    "tar": "^7.4.3",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.1",
@@ -93,6 +95,7 @@
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/yauzl": "^3.4.0",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
     "electron": "^33.2.0",

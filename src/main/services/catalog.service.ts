@@ -51,7 +51,7 @@ const CONSOLE_BADGE_MAP: Record<string, string> = {
 const CONSOLE_ROM_SPECS: Record<
   string,
   {
-    type: 'rom' | 'iso' | 'bin_cue'
+    type: 'rom' | 'iso' | 'bin_cue' | 'folder'
     expectedFilename: string
     extensions: string[]
     labelSuffix: string
@@ -81,11 +81,13 @@ const CONSOLE_ROM_SPECS: Record<
     extensions: ['.iso', '.pkg', '.bin'],
     labelSuffix: 'ISO / Dump PlayStation 3 (.iso / .pkg ou Compactado)'
   },
+  // Dumps de PS4 são pastas de 25 GB ou mais (a que tem o eboot.bin): por isso o requisito é uma
+  // pasta, registrada por referência, em vez de uma ISO copiada para o Cofre.
   PS4: {
-    type: 'iso',
-    expectedFilename: 'game.iso',
-    extensions: ['.iso', '.pkg'],
-    labelSuffix: 'Dump / Arquivos do Jogo PlayStation 4 (ou Compactado)'
+    type: 'folder',
+    expectedFilename: 'game_dump',
+    extensions: ['.pkg', '.iso'],
+    labelSuffix: 'Dump do jogo PlayStation 4 (pasta com eboot.bin, ou .zip / .7z / .rar / .pkg)'
   },
   PSP: {
     type: 'iso',

@@ -16,6 +16,7 @@ export interface RecipeExecutionResult {
   requiresCompatibilityLayer: boolean
   romPaired: boolean
   pairedRomPaths: string[]
+  pairedPatchPaths: string[]
   portableMode: boolean
   status: 'READY_TO_PLAY' | 'NEEDS_ROM' | 'ERROR'
   logs: string[]
@@ -83,6 +84,9 @@ export class RecipeService {
       const req = item.requirement
       const localEntry = item.localEntry
 
+      // Patches/atualizações/DLC são vinculados depois (passo 2b)
+      if (req.type === 'patch') continue
+
       if (!localEntry || !fs.existsSync(localEntry.filePath)) {
         if (!req.optional) {
           allRequiredPaired = false
@@ -95,6 +99,17 @@ export class RecipeService {
         installDir,
         req.keepOriginalName ? localEntry.fileName : req.expectedFilename
       )
+
+      // Pasta do jogo (dump de PS4 etc.): atalho para o local original, nunca uma cópia de dezenas de GB
+      if (localEntry.isDirectory) {
+        const linked = this.linkDirectory(localEntry.filePath, destPath, log)
+        pairedRomPaths.push(linked ?? localEntry.filePath)
+        if (linked) {
+          log(`Pasta do jogo vinculada: ${path.basename(destPath)} -> ${localEntry.filePath}`)
+        }
+        continue
+      }
+
       try {
         const isN64Game =
           recipe.console === 'N64' ||
@@ -161,6 +176,30 @@ export class RecipeService {
       }
     }
 
+    // 2b. Patches, atualizações e DLC: vinculados à subpasta definida pela receita (padrão: patches/)
+    const pairedPatchPaths: string[] = []
+    for (const item of availability.matchedRequirements) {
+      if (item.requirement.type !== 'patch') continue
+      const patches = (item.localEntries ?? (item.localEntry ? [item.localEntry] : [])).filter(
+        (e) => fs.existsSync(e.filePath)
+      )
+      const targetDir = path.join(installDir, item.requirement.targetSubdir || 'patches')
+      // Atalhos de patches que o usuário removeu da lista saem da pasta do jogo (arquivos de verdade ficam)
+      this.removeOrphanLinks(targetDir, new Set(patches.map((p) => p.fileName)))
+      if (patches.length === 0) continue
+      fs.mkdirSync(targetDir, { recursive: true })
+      for (const patch of patches) {
+        const dest = path.join(targetDir, patch.fileName)
+        const placed = this.placePatch(patch, dest, settings.linkStrategy, log)
+        if (placed) pairedPatchPaths.push(dest)
+      }
+      if (pairedPatchPaths.length > 0) {
+        log(
+          `${pairedPatchPaths.length} patch(es)/atualização(ões) disponíveis em "${path.relative(installDir, targetDir)}/".`
+        )
+      }
+    }
+
     // 3. Family-specific post-processing
     if (recipe.family === 'N64Recomp' && pairedRomPaths.length > 0) {
       this.patchN64RecompConfigIfNeeded(installDir, recipe, pairedRomPaths[0], log)
@@ -186,6 +225,8 @@ export class RecipeService {
       if (path.resolve(execDir) !== path.resolve(installDir) && pairedRomPaths.length > 0) {
         for (const romPath of pairedRomPaths) {
           const romInExecDir = path.join(execDir, path.basename(romPath))
+          // Pastas de jogo (dumps) já têm o atalho na raiz; não duplica
+          if (fs.existsSync(romPath) && fs.statSync(romPath).isDirectory()) continue
           if (!fs.existsSync(romInExecDir)) {
             try {
               this.createFileLink(romPath, romInExecDir, settings.linkStrategy)
@@ -241,6 +282,7 @@ export class RecipeService {
       requiresCompatibilityLayer: execInfo.requiresCompatibilityLayer,
       romPaired,
       pairedRomPaths,
+      pairedPatchPaths,
       portableMode,
       status,
       logs
@@ -305,10 +347,89 @@ export class RecipeService {
     )
   }
 
+  private isSymlink(p: string): boolean {
+    try {
+      return fs.lstatSync(p).isSymbolicLink()
+    } catch {
+      return false
+    }
+  }
+
+  /** Remove o atalho anterior (só se for um atalho: nunca apaga arquivos ou pastas de verdade). */
+  private removeLinkIfAny(p: string): boolean {
+    if (!this.isSymlink(p)) return !fs.existsSync(p)
+    try {
+      fs.rmSync(p, { force: true })
+    } catch {
+      try {
+        fs.rmdirSync(p)
+      } catch {
+        return false
+      }
+    }
+    return true
+  }
+
+  /**
+   * Atalho para uma pasta. No Windows usa "junction", que não exige administrador.
+   * Retorna o caminho do atalho ou null se não foi possível criar.
+   */
+  private linkDirectory(target: string, linkPath: string, log: (m: string) => void): string | null {
+    try {
+      if (path.resolve(target) === path.resolve(linkPath)) return linkPath
+      if (!this.removeLinkIfAny(linkPath)) {
+        log(`Aviso: já existe algo em "${path.basename(linkPath)}" que não é um atalho; nada foi alterado.`)
+        return null
+      }
+      fs.mkdirSync(path.dirname(linkPath), { recursive: true })
+      fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
+      return linkPath
+    } catch (err: any) {
+      log(
+        `Aviso: não foi possível criar o atalho da pasta (${err?.message}). O jogo continua apontando para o local original: ${target}`
+      )
+      return null
+    }
+  }
+
+  private removeOrphanLinks(dir: string, keep: Set<string>): void {
+    let names: string[]
+    try {
+      names = fs.readdirSync(dir)
+    } catch {
+      return
+    }
+    for (const name of names) {
+      const full = path.join(dir, name)
+      if (!keep.has(name) && this.isSymlink(full)) this.removeLinkIfAny(full)
+    }
+  }
+
+  /** Coloca um patch na pasta do jogo por atalho; só copia arquivos pequenos (nunca dezenas de GB). */
+  private placePatch(
+    entry: RomVaultEntry,
+    destPath: string,
+    strategy: 'symlink' | 'hardlink' | 'copy',
+    log: (m: string) => void
+  ): boolean {
+    if (entry.isDirectory) {
+      return this.linkDirectory(entry.filePath, destPath, log) !== null
+    }
+    try {
+      if (!this.removeLinkIfAny(destPath)) return false
+      this.createFileLink(entry.filePath, destPath, strategy, 512 * 1024 * 1024)
+      return true
+    } catch (err: any) {
+      log(`Aviso: não foi possível vincular o patch ${entry.fileName}: ${err?.message}`)
+      return false
+    }
+  }
+
   private createFileLink(
     srcPath: string,
     destPath: string,
-    strategy: 'symlink' | 'hardlink' | 'copy'
+    strategy: 'symlink' | 'hardlink' | 'copy',
+    maxCopyBytes = Number.POSITIVE_INFINITY
   ): string {
     if (strategy === 'symlink') {
       try {
@@ -328,6 +449,11 @@ export class RecipeService {
       }
     }
 
+    if (fs.statSync(srcPath).size > maxCopyBytes) {
+      throw new Error(
+        'o sistema não permite atalhos entre esses discos e o arquivo é grande demais para copiar'
+      )
+    }
     fs.copyFileSync(srcPath, destPath)
     return 'copy'
   }

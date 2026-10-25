@@ -150,6 +150,29 @@ export function registerIpcHandlers(
       game.recipe?.requirements.find((r) => r.id === requirementId) ||
       game.recipe?.requirements[0]
 
+    // Jogos que são uma pasta (dumps de PS4...): oferece pasta OU arquivo compactado/.pkg
+    if (req?.type === 'folder') {
+      const choice = await dialog.showMessageBox(win!, {
+        type: 'question',
+        title: 'Escolher o jogo',
+        message: `Como está o seu ${game.title}?`,
+        detail:
+          'Normalmente o dump é uma pasta (a que contém o eboot.bin). Escolher a pasta é o mais rápido: nada é copiado. Você também pode escolher um arquivo compactado (.zip, .7z, .rar) ou um .pkg; arquivos compactados são extraídos para o Cofre e precisam de espaço livre.',
+        buttons: ['Escolher a pasta do jogo', 'Escolher arquivo compactado ou .pkg', 'Cancelar'],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true
+      })
+      if (choice.response === 2) return null
+      if (choice.response === 0) {
+        const dir = await dialog.showOpenDialog(win!, {
+          title: `Pasta do jogo — ${game.title}`,
+          properties: ['openDirectory']
+        })
+        return dir.canceled || dir.filePaths.length === 0 ? null : dir.filePaths[0]
+      }
+    }
+
     const rawExtensions = req
       ? req.extensions.map((ext) => ext.replace(/^\./, ''))
       : ['iso', 'z64', 'n64', 'v64', 'bin', 'cue', 'rom', 'xex', 'gcm', 'rvz']
@@ -190,6 +213,23 @@ export function registerIpcHandlers(
     async (_e, gameId: string, requirementId?: string) => {
       const game = await findGameById(gameId)
       return openRomPickerDialog(game, requirementId)
+    }
+  )
+
+  ipcMain.handle(
+    'vault:pickPatches',
+    async (_e, gameId: string, _requirementId: string | undefined, mode: 'files' | 'folder') => {
+      const game = await findGameById(gameId)
+      const win = getMainWindow()
+      const result = await dialog.showOpenDialog(win!, {
+        title:
+          mode === 'folder'
+            ? `Pasta de patch / DLC — ${game.title}`
+            : `Patches, atualizações ou DLC — ${game.title}`,
+        properties:
+          mode === 'folder' ? ['openDirectory', 'multiSelections'] : ['openFile', 'multiSelections']
+      })
+      return result.canceled ? [] : result.filePaths
     }
   )
 
@@ -248,6 +288,7 @@ export function registerIpcHandlers(
       romPaired: recipeRes.romPaired,
       pairedRomPaths: recipeRes.pairedRomPaths,
       portableMode: recipeRes.portableMode,
+      pairedPatchPaths: recipeRes.pairedPatchPaths,
       launchArgs: game.recipe?.launchArgs ?? installed.launchArgs,
       recipeLogs: recipeRes.logs
     }
@@ -262,6 +303,21 @@ export function registerIpcHandlers(
       await runner.stopGame(gameId)
       const installed = store.getInstalledGame(gameId)
       const settings = store.getSettings()
+
+      // 0. Desfaz os atalhos para a pasta do jogo/patches ANTES de apagar a instalação:
+      //    garante que o dump original do usuário (dezenas de GB) nunca seja tocado.
+      if (installed) {
+        for (const linkPath of [
+          ...(installed.pairedRomPaths || []),
+          ...(installed.pairedPatchPaths || [])
+        ]) {
+          try {
+            if (fs.lstatSync(linkPath).isSymbolicLink()) fs.rmSync(linkPath, { force: true })
+          } catch {
+            // atalho já removido ou inexistente
+          }
+        }
+      }
 
       // 1. Remove installed game directory
       if (installed && fs.existsSync(installed.installDir)) {
@@ -305,10 +361,13 @@ export function registerIpcHandlers(
           const isInsideRomVault = entry.filePath.startsWith(
             settings.romVaultPath
           )
-          if (isInsideRomVault || options?.deleteOriginalArchive) {
+          if (isInsideRomVault || (options?.deleteOriginalArchive && !entry.isDirectory)) {
             try {
               if (fs.existsSync(entry.filePath)) {
-                fs.unlinkSync(entry.filePath)
+                // Pastas só são apagadas se foram extraídas para dentro do Cofre; uma pasta que o
+                // usuário apontou (o dump dele) nunca é apagada, só esquecida.
+                if (entry.isDirectory) fs.rmSync(entry.filePath, { recursive: true, force: true })
+                else fs.unlinkSync(entry.filePath)
               }
             } catch (err) {
               console.warn('[IPC] Failed to delete ROM file:', err)
@@ -339,10 +398,20 @@ export function registerIpcHandlers(
     'vault:removeEntry',
     async (_e, filePath: string, deleteFromDisk?: boolean) => {
       const currentVault = store.getRomVault()
+      const removed = currentVault.find((e) => e.filePath === filePath)
       const remaining = currentVault.filter((e) => e.filePath !== filePath)
+      const vaultRoot = path.resolve(store.getSettings().romVaultPath)
+      const insideVault = path.resolve(filePath).startsWith(vaultRoot + path.sep)
       if (deleteFromDisk && filePath && fs.existsSync(filePath)) {
         try {
-          fs.unlinkSync(filePath)
+          if (removed?.isDirectory) {
+            // Só apaga pastas extraídas para o Cofre; a pasta do usuário é apenas esquecida
+            if (insideVault) fs.rmSync(filePath, { recursive: true, force: true })
+          } else if (removed?.kind === 'patch' && !insideVault) {
+            // Patches apontam para arquivos do usuário: nunca apagados, só removidos da lista
+          } else {
+            fs.unlinkSync(filePath)
+          }
         } catch (err) {
           console.warn('[IPC] Failed to delete ROM file from disk:', err)
         }

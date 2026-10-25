@@ -20,7 +20,11 @@ import {
   Layers,
   Cpu,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Package,
+  FilePlus2,
+  FolderPlus,
+  Folder
 } from 'lucide-react'
 import { CoverFallback } from './CoverFallback'
 import { familyLabel } from '../lib/ui'
@@ -220,6 +224,37 @@ export const GameModal: React.FC<GameModalProps> = ({
     }
   }
 
+  const handleAddPatches = async (mode: 'files' | 'folder'): Promise<void> => {
+    setLaunchError(null)
+    try {
+      const paths = await window.api.pickPatchesForGame(activeGame.id, patchMatch?.requirement.id, mode)
+      if (paths.length === 0) return
+      setActionBusy(true)
+      for (const picked of paths) {
+        await window.api.importRomFileManually(activeGame.id, patchMatch?.requirement.id, picked)
+      }
+      await refreshRomStatus()
+      onRomImported()
+    } catch (err: any) {
+      setLaunchError(err?.message || String(err))
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
+  const handleRemovePatch = async (filePath: string): Promise<void> => {
+    setActionBusy(true)
+    try {
+      // Só esquece o item: o arquivo/pasta original do usuário nunca é apagado
+      await window.api.removeRomVaultEntry(filePath, false)
+      if (activeInstalled) await onReapplyRecipe(activeGame.id)
+      await refreshRomStatus()
+      onRomImported()
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
   const handleRemoveRomFromPc = async (filePath: string): Promise<void> => {
     setActionBusy(true)
     try {
@@ -268,10 +303,10 @@ export const GameModal: React.FC<GameModalProps> = ({
   }
 
   const recipe = activeGame.recipe
-  const requirements: RomRequirement[] =
+  const requirements: RomRequirement[] = (
     recipe && recipe.requirements.length > 0
       ? recipe.requirements
-      : [
+      : ([
           {
             id: `${activeGame.id}_rom`,
             label: `${activeGame.title} — ISO / ROM Original`,
@@ -279,7 +314,12 @@ export const GameModal: React.FC<GameModalProps> = ({
             expectedFilename: 'game.iso',
             extensions: ['.iso', '.bin', '.z64', '.n64', '.rom']
           }
-        ]
+        ] as RomRequirement[])
+  ).filter((r) => r.type !== 'patch')
+  const hasFolderRequirement = requirements.some((r) => r.type === 'folder')
+
+  const patchMatch = romStatus?.matchedRequirements.find((m) => m.requirement.type === 'patch')
+  const patchEntries = patchMatch?.localEntries ?? []
 
   const isDownloading = Boolean(
     activeDownloadTask &&
@@ -784,6 +824,15 @@ export const GameModal: React.FC<GameModalProps> = ({
               </span>
             </div>
 
+            {hasFolderRequirement && (
+              <div className="p-3 rounded-md bg-[#121c27] border border-[#1e3248] text-[11.5px] text-[#b8c4d0] leading-relaxed">
+                <strong className="text-[#66c0f4]">Jogos grandes (ex.: PS4, 25 GB ou mais):</strong> escolha a{' '}
+                <strong>pasta</strong> do dump. Ela fica registrada onde já está, sem copiar nada, e a pasta de
+                instalação recebe um atalho. Arquivos compactados (.zip, .7z, .rar) também funcionam, mas são
+                extraídos para o Cofre e precisam de espaço livre equivalente.
+              </div>
+            )}
+
             <p className="text-xs text-[#96a0aa] leading-relaxed">
               Escolha onde está a ISO ou ROM deste jogo no seu computador. Caso ela esteja compactada (
               <span className="text-[#dcdedf] font-mono">.zip, .7z, .rar, .tar.gz</span>
@@ -813,7 +862,9 @@ export const GameModal: React.FC<GameModalProps> = ({
                           {req.label}
                         </span>
                         <span className="text-[10px] font-mono px-1.5 py-0.5 bg-black/30 text-[#8f98a0] rounded-md">
-                          {req.extensions.join(' ')} | .zip .7z .rar
+                          {req.type === 'folder'
+                            ? `pasta | ${req.extensions.join(' ')}`
+                            : `${req.extensions.join(' ')} | .zip .7z .rar`}
                         </span>
                       </div>
 
@@ -822,6 +873,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                           <div className="text-[#6cc034] font-semibold flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                             <span className="truncate">
+                              {match.localEntry.isDirectory ? 'Pasta: ' : ''}
                               {match.localEntry.fileName} (
                               {formatBytes(match.localEntry.size)})
                             </span>
@@ -837,13 +889,17 @@ export const GameModal: React.FC<GameModalProps> = ({
                           <div className="font-mono text-[10px] text-[#8f98a0] truncate">
                             Local: {match.localEntry.filePath}
                           </div>
-                          <div className="font-mono text-[10px] text-[#67707b] truncate">
-                            SHA-1: {match.localEntry.sha1}
-                          </div>
+                          {!match.localEntry.isDirectory && (
+                            <div className="font-mono text-[10px] text-[#67707b] truncate">
+                              SHA-1: {match.localEntry.sha1}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="text-[11px] text-[#e5a93c]">
-                          Nenhum arquivo selecionado para este jogo. Clique no botão ao lado para localizar a ISO/ROM ou arquivo compactado.
+                          {req.type === 'folder'
+                            ? 'Nenhuma pasta selecionada. Clique no botão ao lado e escolha a pasta do dump do jogo (ou um arquivo compactado).'
+                            : 'Nenhum arquivo selecionado para este jogo. Clique no botão ao lado para localizar a ISO/ROM ou arquivo compactado.'}
                         </div>
                       )}
                     </div>
@@ -860,7 +916,13 @@ export const GameModal: React.FC<GameModalProps> = ({
                       >
                         <FolderSearch className="w-3.5 h-3.5" />
                         <span>
-                          {isReady ? 'Alterar Arquivo' : 'Selecionar ISO / ZIP'}
+                          {isReady
+                            ? req.type === 'folder'
+                              ? 'Alterar'
+                              : 'Alterar Arquivo'
+                            : req.type === 'folder'
+                              ? 'Selecionar pasta / ZIP'
+                              : 'Selecionar ISO / ZIP'}
                         </span>
                       </button>
 
@@ -880,6 +942,96 @@ export const GameModal: React.FC<GameModalProps> = ({
                   </div>
                 )
               })}
+            </div>
+          </div>
+
+          {/* Patches, atualizações e DLC (opcional) */}
+          <div className="bg-[#161f29] border border-[#263545] rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between border-b border-[#253342] pb-2.5">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-2">
+                <Package className="w-4 h-4" />
+                PATCHES, ATUALIZAÇÕES E DLC
+              </h2>
+              <span className="text-[11px] text-[#8f98a0]">Opcional</span>
+            </div>
+
+            <p className="text-xs text-[#96a0aa] leading-relaxed">
+              Tem uma atualização, patch ou DLC do jogo (por exemplo o update 1.09 do Bloodborne, pastas de DLC
+              ou patches da comunidade)? Adicione aqui. Os arquivos ficam onde estão e o RecompHUB cria atalhos
+              na subpasta <span className="font-mono text-[#dcdedf]">{patchMatch?.requirement.targetSubdir || 'patches'}/</span>{' '}
+              do jogo, sem copiar nada pesado.
+              {activeInstalled
+                ? ' Os novos itens são vinculados na hora.'
+                : ' Serão vinculados quando o jogo for instalado.'}
+            </p>
+
+            {patchEntries.length > 0 ? (
+              <div className="space-y-1.5">
+                {patchEntries.map((entry) => (
+                  <div
+                    key={entry.filePath}
+                    className="flex items-center justify-between gap-3 px-3 py-2 rounded-md bg-[#111922] border border-[#223040]"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-white flex items-center gap-1.5 truncate">
+                        {entry.isDirectory ? (
+                          <Folder className="w-3.5 h-3.5 text-[#66c0f4] shrink-0" />
+                        ) : (
+                          <Archive className="w-3.5 h-3.5 text-[#66c0f4] shrink-0" />
+                        )}
+                        <span className="truncate">{entry.fileName}</span>
+                        <span className="text-[10px] font-normal text-[#8f98a0] shrink-0">
+                          {formatBytes(entry.size)}
+                        </span>
+                      </div>
+                      <div className="font-mono text-[10px] text-[#67707b] truncate">{entry.filePath}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePatch(entry.filePath)}
+                      disabled={actionBusy}
+                      title="Remover da lista (o arquivo original não é apagado)"
+                      aria-label={`Remover ${entry.fileName}`}
+                      className="p-1.5 rounded-md text-[#8f98a0] hover:text-white hover:bg-[#7a2828]/60 shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-[11px] text-[#67707b] px-1">Nenhum patch adicionado.</div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleAddPatches('files')}
+                disabled={actionBusy}
+                className="rh-btn rh-btn-ghost px-3.5 min-h-[32px] text-[11px]"
+              >
+                <FilePlus2 className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Adicionar arquivos</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddPatches('folder')}
+                disabled={actionBusy}
+                className="rh-btn rh-btn-ghost px-3.5 min-h-[32px] text-[11px]"
+              >
+                <FolderPlus className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Adicionar pasta (DLC)</span>
+              </button>
+              {activeInstalled && patchEntries.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => window.api.openGameFolder(activeGame.id)}
+                  className="rh-btn rh-btn-ghost px-3.5 min-h-[32px] text-[11px]"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Abrir pasta do jogo</span>
+                </button>
+              )}
             </div>
           </div>
 

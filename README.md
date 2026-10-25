@@ -40,6 +40,8 @@ O RecompHUB faz tudo isso por você, com uma interface parecida com a da Steam.
 - **Reconhece a ROM certa**: o app confere o arquivo (hash SHA-1) para saber se é a ROM certa, mesmo que o nome esteja diferente.
 - **Configura tudo sozinho**: coloca a ROM com o nome que o jogo espera, ativa o modo portátil (saves ficam na pasta do jogo), roda extratores de assets quando necessário, etc.
 - **Jogos de Windows no Linux**: se o port só tem versão para Windows, o RecompHUB roda automaticamente com Proton / `umu-run`, sem precisar adicionar na Steam.
+- **Jogos gigantes (PS4, 25 GB ou mais)**: escolha a **pasta** do dump e ela fica registrada onde já está, sem copiar nada. Arquivos `.zip` de qualquer tamanho (inclusive acima de 2 GB) são extraídos em fluxo, com barra de progresso e checagem de espaço em disco.
+- **Patches, atualizações e DLC**: em qualquer jogo você pode adicionar arquivos ou pastas (ex.: update 1.09, DLC, patches da comunidade); o app cria atalhos na pasta `patches/` do jogo, sem copiar.
 - **Aba Comunidade**: ports do GitHub que ainda não estão no PortsDR, com a mesma instalação em 1 clique. Sugira o seu pelo botão "Sugerir novo port".
 - **Barra de progresso nos Downloads**: download, descompactação e instalação aparecem na aba Downloads, mesmo trocando de página.
 - **Tela cheia**: botão para ativar/desativar tela cheia nos jogos que suportam (ex.: Ace Combat 5).

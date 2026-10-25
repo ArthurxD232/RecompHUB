@@ -60,6 +60,11 @@ export const Settings: React.FC<SettingsProps> = ({
     )
   }
 
+  // Pastas e patches que o usuário apontou (fora do Cofre) são só removidos da lista, nunca apagados
+  const keepsOriginal = (entry: RomVaultEntry): boolean =>
+    (entry.isDirectory || entry.kind === 'patch') &&
+    !entry.filePath.startsWith(settings.romVaultPath)
+
   const handleChooseRomDir = async (): Promise<void> => {
     const dir = await window.api.selectDirectory(
       'Selecionar Pasta Padrão de ROMs / ISOs'
@@ -235,13 +240,19 @@ export const Settings: React.FC<SettingsProps> = ({
                       )}
                     </div>
                     <div className="text-[10px] text-[#67707b] truncate font-mono">
-                      {(entry.size / (1024 * 1024)).toFixed(1)} MB —{' '}
-                      {entry.filePath}
+                      {entry.size >= 1024 ** 3
+                        ? `${(entry.size / 1024 ** 3).toFixed(2)} GB`
+                        : `${(entry.size / (1024 * 1024)).toFixed(1)} MB`}{' '}
+                      — {entry.filePath}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="font-mono text-[10px] text-[#6cc034] bg-[#18281c] px-2 py-0.5 rounded-md border border-[#2a4a32]">
-                      {entry.sha1.slice(0, 12)}...
+                      {entry.isDirectory
+                        ? 'PASTA'
+                        : entry.kind === 'patch'
+                          ? 'PATCH'
+                          : `${entry.sha1.slice(0, 12)}...`}
                     </span>
                     <button
                       onClick={async () => {
@@ -251,11 +262,15 @@ export const Settings: React.FC<SettingsProps> = ({
                         )
                         await onVaultChanged()
                       }}
-                      title="Excluir esta ISO/ROM do computador e remover do Cofre"
+                      title={
+                        keepsOriginal(entry)
+                          ? 'Remove só da lista: o arquivo ou pasta original não é apagado'
+                          : 'Excluir esta ISO/ROM do computador e remover do Cofre'
+                      }
                       className="px-2 py-1 rounded-md bg-[#2a1d1d] hover:bg-[#7a2828] border border-[#522929] text-[10px] font-bold uppercase text-red-200 hover:text-white flex items-center gap-1"
                     >
                       <Trash2 className="w-3 h-3" />
-                      <span>Excluir do PC</span>
+                      <span>{keepsOriginal(entry) ? 'Remover da lista' : 'Excluir do PC'}</span>
                     </button>
                   </div>
                 </div>

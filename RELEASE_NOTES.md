@@ -14,6 +14,8 @@ Catálogo de jogos fornecido pelo **[PortsDR.com](https://portsdr.com/)**, criad
 - ⚡ **Abertura mais rápida no Windows**: o `.exe` portátil agora é gravado sem compressão (descompacta bem mais rápido) e sem idiomas do Chromium que o app não usa. Novo **instalador** `...-Setup.exe` (sem administrador) que abre tão rápido quanto o `.zip`.
 - 🧰 **Instalação mais segura**: o app não escolhe mais ZIP de macOS ou Linux no Windows, nem pacotes de "notices/update"; ports só de iOS, Switch ou macOS deixam de aparecer na lista; pacotes dentro de pacotes (ex.: `linux.tar.gz` dentro de um `.zip`) são extraídos; scripts `.bat` são usados quando o port não tem `.exe`; e o app avisa quando o port usa instalador próprio.
 - 🎯 **ISO/ROM direto no jogo**: ports como *Metroid Prime Port* e *BattleTanx* recebem o caminho da sua ISO/ROM ao iniciar.
+- 💾 **Jogos gigantes (PS4, 25 GB ou mais)**: escolha a **pasta** do dump e ela fica registrada onde já está, sem copiar nada (a pasta de instalação recebe um atalho). Arquivos `.zip` de qualquer tamanho, inclusive acima de 2 GB, são extraídos em fluxo, com barra de progresso, sem travar o app e com checagem de espaço em disco. Corrige o erro `File size is greater than 2 GiB`.
+- 🩹 **Patches, atualizações e DLC**: todo jogo ganhou um espaço opcional para adicionar arquivos ou pastas (ex.: update 1.09, DLC, patches da comunidade). O app cria atalhos na pasta `patches/` do jogo, sem copiar nada pesado; remover um item só tira da lista e nunca apaga o seu arquivo original.
 - 🔎 **Ferramenta de auditoria do catálogo** (`npm run audit:catalog`): para cada jogo do PortsDR, confere qual arquivo seria instalado e se o pacote tem executável, sem baixar jogos.
 
 ## ✨ O que já vinha da beta-0.1

@@ -20,7 +20,8 @@ export interface CatalogResult {
 export interface RomRequirement {
   id: string
   label: string
-  type: 'rom' | 'iso' | 'bios' | 'bin_cue'
+  /** 'folder' = pasta do jogo (dumps de PS4 etc.); 'patch' = patches/atualizações/DLC opcionais */
+  type: 'rom' | 'iso' | 'bios' | 'bin_cue' | 'folder' | 'patch'
   expectedFilename: string
   sha1?: string[]
   md5?: string[]
@@ -29,6 +30,10 @@ export interface RomRequirement {
   region?: string
   /** Mantém o nome original do arquivo ao parear (útil quando o formato varia: .iso, .rvz, .wbfs...). */
   keepOriginalName?: boolean
+  /** Aceita vários arquivos/pastas (patches e DLC). */
+  multiple?: boolean
+  /** Subpasta da instalação onde os itens são vinculados (padrão dos patches: "patches"). */
+  targetSubdir?: string
 }
 
 export interface GameRecipe {
@@ -243,6 +248,10 @@ export interface RomVaultEntry {
   assignedGameIds?: string[]
   assignedRequirementIds?: string[]
   extractedFromArchive?: string
+  /** O item é uma pasta (dump do jogo, DLC...). Não é copiado nem apagado fora do cofre. */
+  isDirectory?: boolean
+  /** Patches/atualizações nunca contam como o arquivo principal do jogo. */
+  kind?: 'main' | 'patch'
 }
 
 export type InstallStage =
@@ -301,6 +310,7 @@ export interface InstalledGame {
   romPaired: boolean
   pairedRomPaths: string[]
   portableMode: boolean
+  pairedPatchPaths?: string[]
   launchFullscreen?: boolean
   launchArgs?: string[]
   playTimeSeconds: number
@@ -337,6 +347,8 @@ export interface RomAvailabilityStatus {
     requirement: RomRequirement
     status: 'local_vault' | 'missing'
     localEntry?: RomVaultEntry
+    /** Todos os itens vinculados (requisitos com `multiple`, como os patches). */
+    localEntries?: RomVaultEntry[]
   }[]
 }
 
@@ -360,6 +372,11 @@ export interface RecompHubAPI {
   }>
   checkRomAvailability: (gameId: string) => Promise<RomAvailabilityStatus>
   pickRomFileForGame: (gameId: string, requirementId?: string) => Promise<string | null>
+  pickPatchesForGame: (
+    gameId: string,
+    requirementId: string | undefined,
+    mode: 'files' | 'folder'
+  ) => Promise<string[]>
   importRomFileManually: (
     gameId: string,
     requirementId?: string,

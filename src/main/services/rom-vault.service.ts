@@ -2,7 +2,6 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as crypto from 'crypto'
 import { spawn } from 'child_process'
-import AdmZip from 'adm-zip'
 import * as tar from 'tar'
 import {
   CatalogGame,
@@ -11,6 +10,13 @@ import {
   RomVaultEntry
 } from '../../shared/types'
 import { StoreService } from './store.service'
+import { withPatchRequirement } from '../../shared/requirements'
+import {
+  directorySize,
+  extractZipStreaming,
+  formatBytes,
+  resolveExtractionRoot
+} from './archive.service'
 
 const SUPPORTED_ROM_EXTENSIONS = new Set([
   '.z64',
@@ -104,14 +110,23 @@ export class RomVaultService {
       existingByPath.set(entry.filePath, entry)
     }
 
-    const candidateFiles = this.collectRomFiles(targetDir)
+    // Dumps extraídos (centenas de milhares de arquivos .pak/.bin/.dat) não devem ser varridos nem
+    // calculados um a um: a pasta inteira já é um item do cofre.
+    const skipDirs = new Set(
+      this.store
+        .getRomVault()
+        .filter((e) => e.isDirectory)
+        .map((e) => path.resolve(e.filePath))
+    )
+    const candidateFiles = this.collectRomFiles(targetDir, 4, 0, skipDirs)
     const results: RomVaultEntry[] = []
 
     for (const existing of this.store.getRomVault()) {
-      if (
-        !isPathInsideDirectory(targetDir, existing.filePath) &&
-        fs.existsSync(existing.filePath)
-      ) {
+      const keep =
+        !isPathInsideDirectory(targetDir, existing.filePath) ||
+        existing.isDirectory ||
+        existing.kind === 'patch'
+      if (keep && fs.existsSync(existing.filePath)) {
         results.push(existing)
       }
     }
@@ -165,11 +180,45 @@ export class RomVaultService {
     return { entries: results, scannedCount: candidateFiles.length }
   }
 
+  private getRequirements(game: CatalogGame): RomRequirement[] {
+    const recipe = game.recipe
+    const base: RomRequirement[] =
+      recipe && recipe.requirements.length > 0
+        ? recipe.requirements
+        : [
+            {
+              id: `${game.id}_rom`,
+              label: `${game.title} — ISO / ROM Original`,
+              type: 'iso',
+              expectedFilename: 'game.iso',
+              extensions: ['.iso', '.bin', '.z64', '.n64', '.rom']
+            }
+          ]
+    // Todo jogo ganha o espaço opcional de patches/atualizações/DLC
+    return withPatchRequirement(base)
+  }
+
+  private gameVaultDir(game: CatalogGame): string {
+    return path.join(
+      this.store.getSettings().romVaultPath,
+      game.id.replace(/[^a-z0-9_-]+/gi, '_').slice(0, 60)
+    )
+  }
+
+  private pseudoHashes(label: string): { sha1: string; md5: string } {
+    return {
+      sha1: crypto.createHash('sha1').update(label).digest('hex'),
+      md5: crypto.createHash('md5').update(label).digest('hex')
+    }
+  }
+
   /**
-   * Imports a user-selected file for a specific game requirement with live progress reporting.
+   * Imports a user-selected item for a specific game requirement with live progress reporting.
    * Accepts either:
    *  - A direct ROM/ISO file (.iso, .z64, .n64, .bin, .cue, .xex, etc.)
-   *  - A compressed archive (.zip, .7z, .rar, .tar.gz, .tgz) containing the ROM/ISO inside!
+   *  - A compressed archive (.zip, .7z, .rar, .tar.gz, .tgz) containing the ROM/ISO inside
+   *  - A folder (dumps de PS4 etc.): fica registrada por referência, sem copiar dezenas de GB
+   *  - Patches/atualizações/DLC (requisito do tipo "patch"): arquivos ou pastas, também por referência
    */
   public async importRomOrArchiveForGame(
     pickedFilePath: string,
@@ -181,9 +230,20 @@ export class RomVaultService {
       throw new Error(`Arquivo não encontrado: ${pickedFilePath}`)
     }
 
+    const requirements = this.getRequirements(game)
     const req =
-      game.recipe?.requirements.find((r) => r.id === requirementId) ||
-      game.recipe?.requirements[0]
+      requirements.find((r) => r.id === requirementId) ||
+      requirements.find((r) => r.type !== 'patch')
+
+    const pickedStat = fs.statSync(pickedFilePath)
+
+    if (req?.type === 'patch') {
+      return this.importPatch(pickedFilePath, pickedStat, game, req, onProgress)
+    }
+
+    if (pickedStat.isDirectory()) {
+      return this.importDirectory(pickedFilePath, game, req, undefined, onProgress)
+    }
 
     const lowerName = pickedFilePath.toLowerCase()
     const ext = path.extname(lowerName)
@@ -191,6 +251,31 @@ export class RomVaultService {
       COMPRESSED_ARCHIVE_EXTENSIONS.has(ext) ||
       lowerName.endsWith('.tar.gz') ||
       lowerName.endsWith('.tar.xz')
+
+    // Jogo que é uma pasta, entregue num arquivo compactado: a pasta extraída é o item do cofre
+    if (isCompressed && req?.type === 'folder') {
+      const archiveName = path.basename(pickedFilePath)
+      const extractDir = path.join(
+        this.gameVaultDir(game),
+        path.basename(archiveName).replace(/\.(tar\.gz|tar\.xz|tgz|zip|7z|rar|gz|xz)$/i, '')
+      )
+      // Uma tentativa anterior pode ter ficado pela metade
+      fs.rmSync(extractDir, { recursive: true, force: true })
+      onProgress?.(2, `Extraindo ${archiveName}...`)
+      await this.extractArchive(pickedFilePath, extractDir, (pct) =>
+        onProgress?.(
+          Math.min(93, Math.max(2, Math.round(pct * 0.93))),
+          `Extraindo ${archiveName} (${pct}%)...`
+        )
+      )
+      return this.importDirectory(
+        resolveExtractionRoot(extractDir),
+        game,
+        req,
+        archiveName,
+        onProgress
+      )
+    }
 
     let finalRomPath = pickedFilePath
     let extractedFromArchive: string | undefined
@@ -214,11 +299,7 @@ export class RomVaultService {
         }
       )
     } else {
-      const vaultDir = path.join(
-        this.store.getSettings().romVaultPath,
-        game.id.replace(/[^a-z0-9_-]+/gi, '_').slice(0, 60)
-      )
-      finalRomPath = this.normalizeN64Rom(pickedFilePath, vaultDir)
+      finalRomPath = this.normalizeN64Rom(pickedFilePath, this.gameVaultDir(game))
     }
 
     if (onProgress) {
@@ -243,7 +324,8 @@ export class RomVaultService {
       scannedAt: new Date().toISOString(),
       assignedGameIds: [game.id],
       assignedRequirementIds: req ? [`${game.id}::${req.id}`] : [],
-      extractedFromArchive
+      extractedFromArchive,
+      kind: 'main'
     }
 
     this.store.upsertRomVaultEntry(entry)
@@ -253,45 +335,118 @@ export class RomVaultService {
     return entry
   }
 
+  /** Pasta do jogo (dump). Registrada por referência: nada é copiado. */
+  private async importDirectory(
+    dir: string,
+    game: CatalogGame,
+    req: RomRequirement | undefined,
+    extractedFromArchive: string | undefined,
+    onProgress?: (percent: number, stageLabel: string) => void
+  ): Promise<RomVaultEntry> {
+    onProgress?.(94, 'Conferindo a pasta do jogo...')
+    const { bytes, files } = await directorySize(dir, (count, total) =>
+      onProgress?.(95, `Conferindo a pasta do jogo (${count} arquivos, ${formatBytes(total)})...`)
+    )
+    if (files === 0) {
+      throw new Error(`A pasta "${dir}" está vazia ou não pôde ser lida.`)
+    }
+
+    const stat = fs.statSync(dir)
+    const entry: RomVaultEntry = {
+      filePath: dir,
+      fileName: path.basename(dir),
+      size: bytes,
+      fileModifiedAt: stat.mtimeMs,
+      ...this.pseudoHashes(`dir:${path.resolve(dir)}:${files}:${bytes}`),
+      extension: '',
+      scannedAt: new Date().toISOString(),
+      assignedGameIds: [game.id],
+      assignedRequirementIds: req ? [`${game.id}::${req.id}`] : [],
+      extractedFromArchive,
+      isDirectory: true,
+      kind: 'main'
+    }
+
+    this.store.upsertRomVaultEntry(entry)
+    onProgress?.(100, `Pasta do jogo pronta: ${entry.fileName} (${formatBytes(bytes)})`)
+    return entry
+  }
+
+  /** Patch, atualização ou DLC: arquivo ou pasta guardados por referência para o jogo. */
+  private async importPatch(
+    pickedPath: string,
+    stat: fs.Stats,
+    game: CatalogGame,
+    req: RomRequirement,
+    onProgress?: (percent: number, stageLabel: string) => void
+  ): Promise<RomVaultEntry> {
+    const name = path.basename(pickedPath)
+    onProgress?.(10, `Registrando patch ${name}...`)
+
+    let size = stat.size
+    let hashes: { sha1: string; md5: string }
+    if (stat.isDirectory()) {
+      const dirInfo = await directorySize(pickedPath)
+      size = dirInfo.bytes
+      hashes = this.pseudoHashes(`patchdir:${path.resolve(pickedPath)}:${dirInfo.files}:${dirInfo.bytes}`)
+    } else {
+      hashes = await this.computeFileHashes(pickedPath, stat.size > 64 * 1024 * 1024)
+    }
+
+    const entry: RomVaultEntry = {
+      filePath: pickedPath,
+      fileName: name,
+      size,
+      fileModifiedAt: stat.mtimeMs,
+      sha1: hashes.sha1.toLowerCase(),
+      md5: hashes.md5.toLowerCase(),
+      extension: stat.isDirectory() ? '' : path.extname(pickedPath).toLowerCase(),
+      scannedAt: new Date().toISOString(),
+      assignedGameIds: [game.id],
+      assignedRequirementIds: [`${game.id}::${req.id}`],
+      isDirectory: stat.isDirectory(),
+      kind: 'patch'
+    }
+
+    this.store.upsertRomVaultEntry(entry)
+    onProgress?.(100, `Patch pronto: ${name} (${formatBytes(size)})`)
+    return entry
+  }
+
+  /** Extrai qualquer formato suportado, sempre em fluxo (sem carregar o arquivo na memória). */
+  private async extractArchive(
+    archivePath: string,
+    destDir: string,
+    onPercent?: (pct: number) => void
+  ): Promise<void> {
+    const lower = archivePath.toLowerCase()
+    fs.mkdirSync(destDir, { recursive: true })
+
+    if (lower.endsWith('.zip')) {
+      await extractZipStreaming(archivePath, destDir, {
+        onProgress: (p) => onPercent?.(p.percent)
+      })
+    } else if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) {
+      onPercent?.(10)
+      await tar.x({ file: archivePath, cwd: destDir })
+      onPercent?.(100)
+    } else if (lower.endsWith('.7z') || lower.endsWith('.rar') || lower.endsWith('.tar.xz')) {
+      await this.extractWithSystemTool(archivePath, destDir, onPercent)
+    } else {
+      throw new Error(`Formato compactado não suportado: ${path.basename(archivePath)}`)
+    }
+  }
+
   private async extractRomFromCompressedFile(
     archivePath: string,
     game: CatalogGame,
     req?: RomRequirement,
     onPercent?: (pct: number) => void
   ): Promise<string> {
-    const settings = this.store.getSettings()
-    const gameVaultSubdir = path.join(
-      settings.romVaultPath,
-      game.id.replace(/[^a-z0-9_-]+/gi, '_').slice(0, 60)
-    )
+    const gameVaultSubdir = this.gameVaultDir(game)
+    fs.mkdirSync(gameVaultSubdir, { recursive: true })
 
-    if (!fs.existsSync(gameVaultSubdir)) {
-      fs.mkdirSync(gameVaultSubdir, { recursive: true })
-    }
-
-    const lower = archivePath.toLowerCase()
-
-    if (lower.endsWith('.zip')) {
-      if (onPercent) onPercent(20)
-      const zip = new AdmZip(archivePath)
-      zip.extractAllTo(gameVaultSubdir, true)
-      if (onPercent) onPercent(95)
-    } else if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) {
-      if (onPercent) onPercent(20)
-      await tar.x({
-        file: archivePath,
-        cwd: gameVaultSubdir
-      })
-      if (onPercent) onPercent(95)
-    } else if (
-      lower.endsWith('.7z') ||
-      lower.endsWith('.rar') ||
-      lower.endsWith('.tar.xz')
-    ) {
-      await this.extractWithSystemTool(archivePath, gameVaultSubdir, onPercent)
-    } else {
-      throw new Error(`Formato compactado não suportado: ${path.basename(archivePath)}`)
-    }
+    await this.extractArchive(archivePath, gameVaultSubdir, onPercent)
 
     const extractedFiles = this.collectAllFilesRecursive(gameVaultSubdir)
     if (extractedFiles.length === 0) {
@@ -455,8 +610,14 @@ export class RomVaultService {
     return files
   }
 
-  private collectRomFiles(dir: string, maxDepth = 4, currentDepth = 0): string[] {
+  private collectRomFiles(
+    dir: string,
+    maxDepth = 4,
+    currentDepth = 0,
+    skipDirs: Set<string> = new Set()
+  ): string[] {
     if (currentDepth > maxDepth) return []
+    if (skipDirs.has(path.resolve(dir))) return []
     const files: string[] = []
     let entries: fs.Dirent[] = []
     try {
@@ -469,7 +630,7 @@ export class RomVaultService {
       if (d.name.startsWith('.')) continue
       const fullPath = path.join(dir, d.name)
       if (d.isDirectory()) {
-        files.push(...this.collectRomFiles(fullPath, maxDepth, currentDepth + 1))
+        files.push(...this.collectRomFiles(fullPath, maxDepth, currentDepth + 1, skipDirs))
       } else if (d.isFile()) {
         const ext = path.extname(d.name).toLowerCase()
         if (SUPPORTED_ROM_EXTENSIONS.has(ext)) {
@@ -567,23 +728,21 @@ export class RomVaultService {
   }
 
   public async checkRomAvailability(game: CatalogGame): Promise<RomAvailabilityStatus> {
-    const recipe = game.recipe
-    const requirements: RomRequirement[] =
-      recipe && recipe.requirements.length > 0
-        ? recipe.requirements
-        : [
-            {
-              id: `${game.id}_rom`,
-              label: `${game.title} — ISO / ROM Original`,
-              type: 'iso',
-              expectedFilename: 'game.iso',
-              extensions: ['.iso', '.bin', '.z64', '.n64', '.rom']
-            }
-          ]
-
+    const requirements = this.getRequirements(game)
     const localEntries = this.getVaultEntries()
 
     const matchedRequirements = requirements.map((req) => {
+      if (req.type === 'patch') {
+        const reqKey = `${game.id}::${req.id}`
+        const patches = localEntries.filter((e) => e.assignedRequirementIds?.includes(reqKey))
+        return {
+          requirement: req,
+          status: patches.length > 0 ? ('local_vault' as const) : ('missing' as const),
+          localEntry: patches[0],
+          localEntries: patches
+        }
+      }
+
       const localMatch = this.findLocalMatch(req, game, localEntries)
       if (localMatch) {
         return {
@@ -618,9 +777,17 @@ export class RomVaultService {
     const reqKey = `${game.id}::${req.id}`
     const byExplicitReq = localEntries.find(
       (e) =>
-        e.assignedRequirementIds?.includes(reqKey) && fs.existsSync(e.filePath)
+        e.kind !== 'patch' &&
+        e.assignedRequirementIds?.includes(reqKey) &&
+        fs.existsSync(e.filePath)
     )
     if (byExplicitReq) return byExplicitReq
+
+    // Patches/atualizações nunca valem como o jogo principal; pastas só servem a requisitos de pasta
+    const wantsFolder = req.type === 'folder'
+    localEntries = localEntries.filter(
+      (e) => e.kind !== 'patch' && Boolean(e.isDirectory) === wantsFolder
+    )
 
     if (req.type !== 'bios') {
       const byExplicitGame = localEntries.find(

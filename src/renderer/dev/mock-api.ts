@@ -1,6 +1,7 @@
 // Ambiente de desenvolvimento no navegador (sem Electron): `npm run dev:web`.
 // Instala um `window.api` falso com dados de exemplo para iterar na interface com recarga rápida.
 // Este arquivo só é carregado quando import.meta.env.DEV e window.api não existe; não vai para o build final.
+import { withPatchRequirement } from '../../shared/requirements'
 import {
   AppSettings,
   CatalogGame,
@@ -8,7 +9,8 @@ import {
   DownloadTaskProgress,
   InstalledGame,
   RecompHubAPI,
-  RomAvailabilityStatus
+  RomAvailabilityStatus,
+  RomVaultEntry
 } from '../../shared/types'
 import sample from './catalog-sample.json'
 import communityRaw from '../../main/data/community-ports.json'
@@ -75,13 +77,21 @@ function toGame(raw: Partial<CatalogGame> & { id: string; title: string }): Cata
       console: badge,
       family,
       requirements: [
-        {
-          id: `${raw.id}_rom`,
-          label: `${raw.title} — ISO / ROM original`,
-          type: 'rom',
-          expectedFilename: 'game.z64',
-          extensions: ['.z64', '.iso']
-        }
+        badge === 'PS4'
+          ? {
+              id: `${raw.id}_dump`,
+              label: `${raw.title} — Dump do jogo PlayStation 4 (pasta com eboot.bin, ou .zip / .7z / .rar / .pkg)`,
+              type: 'folder',
+              expectedFilename: 'game_dump',
+              extensions: ['.pkg', '.iso']
+            }
+          : {
+              id: `${raw.id}_rom`,
+              label: `${raw.title} — ISO / ROM original`,
+              type: 'rom',
+              expectedFilename: 'game.z64',
+              extensions: ['.z64', '.iso']
+            }
       ]
     }
   } as CatalogGame
@@ -248,6 +258,9 @@ const downloads: DownloadTaskProgress[] = [
   }
 ]
 
+// Patches adicionados durante a sessão de pré-visualização
+const mockPatches: Record<string, RomVaultEntry[]> = {}
+
 const findGame = (id: string): CatalogGame | undefined =>
   [...catalogGames, ...communityGames].flatMap((g) => [g, ...(g.ports || []).map((p) => ({ ...g, ...p }))]).find((g) => g.id === id)
 
@@ -281,21 +294,56 @@ export function installMockApi(): void {
     scanRomVault: async () => ({ entries: [], scannedCount: 0 }),
     checkRomAvailability: async (gameId): Promise<RomAvailabilityStatus> => {
       const game = findGame(gameId)
-      const requirements = game?.recipe?.requirements || []
+      const requirements = withPatchRequirement(game?.recipe?.requirements || [])
       return {
         ready: false,
         source: 'missing',
-        matchedRequirements: requirements.map((requirement) => ({ requirement, status: 'missing' as const }))
+        matchedRequirements: requirements.map((requirement) => {
+          if (requirement.type === 'patch') {
+            const entries = mockPatches[gameId] || []
+            return {
+              requirement,
+              status: entries.length ? ('local_vault' as const) : ('missing' as const),
+              localEntry: entries[0],
+              localEntries: entries
+            }
+          }
+          return { requirement, status: 'missing' as const }
+        })
       }
     },
     pickRomFileForGame: async () => null,
-    importRomFileManually: async () => null,
+    pickPatchesForGame: async (_id, _req, mode) =>
+      mode === 'folder'
+        ? ['/home/jogador/dumps/SPEXPANSIONDLC03']
+        : ['/home/jogador/dumps/CUSA03173-update-1.09.pkg', '/home/jogador/dumps/community-patch-60fps.zip'],
+    importRomFileManually: async (gameId, _req, picked) => {
+      const isDir = !/\.[a-z0-9]+$/i.test(picked || '')
+      const entry: RomVaultEntry = {
+        filePath: picked || '',
+        fileName: (picked || '').split('/').pop() || '',
+        size: isDir ? 412 * 1024 * 1024 : 3.4 * 1024 * 1024 * 1024,
+        sha1: 'mock',
+        md5: 'mock',
+        extension: '',
+        scannedAt: new Date().toISOString(),
+        isDirectory: isDir,
+        kind: 'patch'
+      }
+      mockPatches[gameId] = [...(mockPatches[gameId] || []), entry]
+      return entry
+    },
     installGame: async () => ({ taskId: 'mock' }),
     reapplyRecipe: async (gameId) => library.find((l) => l.gameId === gameId) || library[0],
     uninstallGame: async (gameId) => {
       library = library.filter((l) => l.gameId !== gameId)
     },
-    removeRomVaultEntry: async () => [],
+    removeRomVaultEntry: async (filePath) => {
+      for (const id of Object.keys(mockPatches)) {
+        mockPatches[id] = mockPatches[id].filter((e) => e.filePath !== filePath)
+      }
+      return []
+    },
     setGameFullscreen: async () => null,
     getActiveDownloads: async () => downloads,
     getLibrary: async () => library,

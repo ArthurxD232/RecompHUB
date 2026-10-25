@@ -43,6 +43,11 @@ const api: RecompHubAPI = {
     ipcRenderer.invoke('vault:checkAvailability', gameId),
   pickRomFileForGame: (gameId: string, requirementId?: string) =>
     ipcRenderer.invoke('vault:pickFile', gameId, requirementId),
+  pickPatchesForGame: (
+    gameId: string,
+    requirementId: string | undefined,
+    mode: 'files' | 'folder'
+  ) => ipcRenderer.invoke('vault:pickPatches', gameId, requirementId, mode),
   importRomFileManually: (
     gameId: string,
     requirementId?: string,
