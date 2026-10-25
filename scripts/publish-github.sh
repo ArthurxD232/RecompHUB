@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publica o RecompHUB no GitHub: cria o repositório, envia o código e cria a release beta-0.1
+# Publica o RecompHUB no GitHub: cria o repositório, envia o código e cria a release beta-0.2
 # com todos os arquivos de ./release anexados.
 #
 # Uso:
@@ -11,8 +11,8 @@ set -euo pipefail
 
 OWNER="${GITHUB_OWNER:-ArthurxD232}"
 REPO="${GITHUB_REPO:-RecompHUB}"
-TAG="${RELEASE_TAG:-beta-0.1}"
-RELEASE_NAME="RecompHUB beta-0.1"
+TAG="${RELEASE_TAG:-beta-0.2}"
+RELEASE_NAME="RecompHUB beta-0.2"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 API="https://api.github.com"
 
@@ -78,7 +78,7 @@ echo "==> Enviando arquivos da release..."
 # Lista dos arquivos já anexados (nome<TAB>id), para substituir versões antigas.
 existing_assets=$(curl -sf "${auth[@]}" "${API}/repos/${OWNER}/${REPO}/releases/${release_id}/assets?per_page=100" \
   | python3 -c 'import json,sys;[print(a["name"]+"\t"+str(a["id"])) for a in json.load(sys.stdin)]')
-for f in "$ROOT"/release/RecompHUB-beta-0.1-* "$ROOT"/release/SHA256SUMS.txt; do
+for f in "$ROOT"/release/RecompHUB-beta-0.2-* "$ROOT"/release/SHA256SUMS.txt; do
   [[ -f "$f" ]] || continue
   name=$(basename "$f")
   old_id=$(printf '%s\n' "$existing_assets" | awk -F'\t' -v n="$name" '$1==n{print $2}')

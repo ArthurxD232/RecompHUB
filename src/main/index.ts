@@ -35,7 +35,7 @@ function createWindow(): void {
     backgroundColor: '#171a21',
     // No Windows empacotado o ícone já está embutido no .exe (evita decodificar o PNG grande na abertura)
     ...(process.platform === 'win32' && app.isPackaged ? {} : { icon: iconPath }),
-    title: 'RecompHUB — 1-Click Decomp & Static Recomp PC Launcher (beta-0.1)',
+    title: 'RecompHUB — 1-Click Decomp & Static Recomp PC Launcher (beta-0.2)',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

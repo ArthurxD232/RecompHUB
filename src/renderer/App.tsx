@@ -308,7 +308,7 @@ export function App(): React.ReactElement {
                 Recomp<span className="text-[#1a9fff]">HUB</span>
               </span>
               <span className="px-1.5 py-0.5 rounded-[3px] bg-[#1a9fff]/15 text-[9px] font-bold uppercase tracking-wider text-[#66c0f4]">
-                beta-0.1
+                beta-0.2
               </span>
             </div>
           </button>

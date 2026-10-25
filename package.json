@@ -1,7 +1,7 @@
 {
   "name": "recomphub",
   "productName": "RecompHUB",
-  "version": "0.1.0-beta.1",
+  "version": "0.2.0-beta.1",
   "description": "RecompHUB - 1-Click Decomp & Static Recomp PC Launcher (catálogo PortsDR.com)",
   "main": "./out/main/index.js",
   "author": {
@@ -29,7 +29,7 @@
   "build": {
     "appId": "com.recomphub.launcher",
     "productName": "RecompHUB",
-    "artifactName": "RecompHUB-beta-0.1-${os}-${arch}.${ext}",
+    "artifactName": "RecompHUB-beta-0.2-${os}-${arch}.${ext}",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -73,7 +73,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "RecompHUB",
       "runAfterFinish": true,
-      "artifactName": "RecompHUB-beta-0.1-${os}-${arch}-Setup.${ext}"
+      "artifactName": "RecompHUB-beta-0.2-${os}-${arch}-Setup.${ext}"
     }
   },
   "dependencies": {
