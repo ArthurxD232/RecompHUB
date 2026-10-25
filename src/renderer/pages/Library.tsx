@@ -87,7 +87,7 @@ export const Library: React.FC<LibraryProps> = ({
       </div>
 
       {library.length === 0 ? (
-        <div className="p-10 bg-[#16202d] border border-[#263649] rounded-[3px] text-center space-y-3">
+        <div className="p-10 bg-[#16202d] border border-[#263649] rounded-lg text-center space-y-3">
           <h3 className="text-sm font-bold uppercase tracking-wide text-white">
             NENHUM JOGO INSTALADO NA BIBLIOTECA
           </h3>
@@ -96,7 +96,7 @@ export const Library: React.FC<LibraryProps> = ({
           </p>
           <button
             onClick={onGoToCatalog}
-            className="steam-btn-blue px-5 py-2 rounded-[2px] text-white text-xs font-bold uppercase tracking-wider inline-flex items-center gap-2 shadow"
+            className="steam-btn-blue px-5 py-2 rounded-md text-white text-xs font-bold uppercase tracking-wider inline-flex items-center gap-2 shadow"
           >
             <span>IR PARA O CATÁLOGO PORTSDR</span>
           </button>
@@ -107,10 +107,10 @@ export const Library: React.FC<LibraryProps> = ({
             <div
               key={inst.id}
               onClick={() => openGameDetails(inst)}
-              className="bg-[#16202d] hover:bg-[#1e2c3d] border border-[#263649] hover:border-[#3e5875] rounded-[3px] p-3.5 flex flex-wrap items-center justify-between gap-4 cursor-pointer transition-colors"
+              className="bg-[#16202d] hover:bg-[#1e2c3d] border border-[#263649] hover:border-[#3e5875] rounded-lg p-3.5 flex flex-wrap items-center justify-between gap-4 cursor-pointer transition-colors"
             >
               <div className="flex items-center gap-4 min-w-0">
-                <div className="w-16 h-12 rounded-[2px] bg-[#0e141b] border border-[#28384a] overflow-hidden shrink-0 flex items-center justify-center">
+                <div className="w-16 h-12 rounded-md bg-[#0e141b] border border-[#28384a] overflow-hidden shrink-0 flex items-center justify-center">
                   {inst.imageUrl ? (
                     <img
                       src={inst.imageUrl}
@@ -126,7 +126,7 @@ export const Library: React.FC<LibraryProps> = ({
 
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="px-1.5 py-0.5 bg-[#233242] text-[#67c1f5] text-[10px] font-bold uppercase rounded-[2px]">
+                    <span className="px-1.5 py-0.5 bg-[#233242] text-[#67c1f5] text-[10px] font-bold uppercase rounded-md">
                       {inst.consoleBadge}
                     </span>
                     <h3 className="text-sm font-bold text-white truncate">
@@ -176,7 +176,7 @@ export const Library: React.FC<LibraryProps> = ({
                   <button
                     onClick={() => window.api.openGameFolder(inst.gameId)}
                     title="Abrir pasta de instalação"
-                    className="p-2 rounded-[2px] bg-[#243242] hover:bg-[#314357] border border-[#34475c] text-[#c7d5e0]"
+                    className="p-2 rounded-md bg-[#243242] hover:bg-[#314357] border border-[#34475c] text-[#c7d5e0]"
                   >
                     <FolderOpen className="w-4 h-4" />
                   </button>
@@ -187,7 +187,7 @@ export const Library: React.FC<LibraryProps> = ({
                       setConfirmGame(inst)
                     }}
                     title="Desinstalar jogo e/ou ISO"
-                    className="p-2 rounded-[2px] bg-[#243242] hover:bg-[#7a2828] border border-[#34475c] text-[#c7d5e0] hover:text-white"
+                    className="p-2 rounded-md bg-[#243242] hover:bg-[#7a2828] border border-[#34475c] text-[#c7d5e0] hover:text-white"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -195,7 +195,7 @@ export const Library: React.FC<LibraryProps> = ({
                   {inst.status === 'RUNNING' ? (
                     <button
                       onClick={() => onStop(inst.gameId)}
-                      className="px-5 py-2 rounded-[2px] bg-[#c93838] hover:bg-[#e04343] text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
+                      className="px-5 py-2 rounded-md bg-[#c93838] hover:bg-[#e04343] text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
                     >
                       <Square className="w-3.5 h-3.5 fill-current" />
                       <span>PARAR</span>
@@ -209,7 +209,7 @@ export const Library: React.FC<LibraryProps> = ({
                           onLaunch(inst.gameId)
                         }
                       }}
-                      className={`px-6 py-2 rounded-[2px] text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow ${
+                      className={`px-6 py-2 rounded-md text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow ${
                         inst.status === 'NEEDS_ROM'
                           ? 'bg-[#b87d14] hover:bg-[#cf8e19]'
                           : 'steam-btn-green'
@@ -231,7 +231,7 @@ export const Library: React.FC<LibraryProps> = ({
       {/* Steam Uninstall Confirmation Modal */}
       {confirmGame && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[#1b2838] border border-[#354c66] rounded-[3px] shadow-2xl overflow-hidden">
+          <div className="w-full max-w-md bg-[#1b2838] border border-[#354c66] rounded-lg shadow-2xl overflow-hidden">
             <div className="px-5 py-3.5 bg-[#171d25] border-b border-[#2a3846] flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white">
                 <Trash2 className="w-4 h-4 text-red-400" />
@@ -252,7 +252,7 @@ export const Library: React.FC<LibraryProps> = ({
                 Isso removerá os executáveis e arquivos do port instalado.
               </p>
 
-              <label className="p-3 rounded-[2px] bg-[#131c27] border border-[#2a3c52] flex items-start gap-3 cursor-pointer select-none hover:border-[#416082]">
+              <label className="p-3 rounded-md bg-[#131c27] border border-[#2a3c52] flex items-start gap-3 cursor-pointer select-none hover:border-[#416082]">
                 <input
                   type="checkbox"
                   checked={deleteIsoToo}
@@ -274,14 +274,14 @@ export const Library: React.FC<LibraryProps> = ({
                 <button
                   onClick={() => setConfirmGame(null)}
                   disabled={uninstalling}
-                  className="px-4 py-2 rounded-[2px] bg-[#2a3846] hover:bg-[#37495b] text-xs font-bold uppercase tracking-wider text-[#dcdedf]"
+                  className="px-4 py-2 rounded-md bg-[#2a3846] hover:bg-[#37495b] text-xs font-bold uppercase tracking-wider text-[#dcdedf]"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleConfirmUninstall}
                   disabled={uninstalling}
-                  className="px-5 py-2 rounded-[2px] bg-[#b83232] hover:bg-[#d43b3b] text-xs font-bold uppercase tracking-wider text-white shadow"
+                  className="px-5 py-2 rounded-md bg-[#b83232] hover:bg-[#d43b3b] text-xs font-bold uppercase tracking-wider text-white shadow"
                 >
                   {uninstalling ? 'Excluindo...' : 'Confirmar Exclusão'}
                 </button>

@@ -135,7 +135,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
         {/* Header */}
         <div className="px-6 py-4 bg-[#121922] border-b border-[#28384b] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-[3px] bg-[#1a9fff]/20 border border-[#1a9fff]/40 flex items-center justify-center text-[#67c1f5]">
+            <div className="w-7 h-7 rounded-lg bg-[#1a9fff]/20 border border-[#1a9fff]/40 flex items-center justify-center text-[#67c1f5]">
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
@@ -169,7 +169,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
             <div className="pt-2">
               <button
                 onClick={handleResetAndClose}
-                className="steam-btn-blue px-6 py-2 rounded-[2px] text-xs font-bold uppercase tracking-wider text-white shadow"
+                className="steam-btn-blue px-6 py-2 rounded-md text-xs font-bold uppercase tracking-wider text-white shadow"
               >
                 Concluir
               </button>
@@ -190,13 +190,13 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
                   placeholder="https://github.com/autor/nome-do-port"
                   value={githubUrl}
                   onChange={(e) => setGithubUrl(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-[2px] text-white text-xs outline-none"
+                  className="flex-1 px-3 py-2 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-md text-white text-xs outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleInspect}
                   disabled={isInspecting || !githubUrl.trim()}
-                  className="px-4 py-2 bg-[#253648] hover:bg-[#324961] disabled:opacity-50 text-white font-bold uppercase text-[11px] tracking-wider rounded-[2px] flex items-center gap-1.5 shrink-0"
+                  className="px-4 py-2 bg-[#253648] hover:bg-[#324961] disabled:opacity-50 text-white font-bold uppercase text-[11px] tracking-wider rounded-md flex items-center gap-1.5 shrink-0"
                 >
                   {isInspecting ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -212,7 +212,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
             </div>
 
             {inspectError && (
-              <div className="p-3 bg-[#441a1a] border border-[#7a2e2e] rounded-[2px] text-xs text-red-100 flex items-center gap-2">
+              <div className="p-3 bg-[#441a1a] border border-[#7a2e2e] rounded-md text-xs text-red-100 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-red-300 shrink-0" />
                 <span>{inspectError}</span>
               </div>
@@ -220,7 +220,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
 
             {inspectedData && (
               <div className="space-y-2">
-                <div className="p-3 bg-[#111c27] border border-[#233a52] rounded-[2px] space-y-2">
+                <div className="p-3 bg-[#111c27] border border-[#233a52] rounded-md space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-[#67c1f5]">
                       ✓ Dados Detectados do Repositório
@@ -245,7 +245,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
                 </div>
 
                 {!inspectedData.hasReleases && (
-                  <div className="p-3 bg-[#241a12] border border-[#6b4718] rounded-[2px] text-xs text-[#ffc875] flex items-start gap-2.5">
+                  <div className="p-3 bg-[#241a12] border border-[#6b4718] rounded-md text-xs text-[#ffc875] flex items-start gap-2.5">
                     <AlertTriangle className="w-4 h-4 text-[#e5a93c] shrink-0 mt-0.5" />
                     <div className="space-y-0.5">
                       <div className="font-bold text-[#ffc875]">Aviso: Repositório sem releases públicas</div>
@@ -270,7 +270,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
                   placeholder="Ex: Super Mario 64"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-[2px] text-white outline-none"
+                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-md text-white outline-none"
                 />
               </div>
 
@@ -284,7 +284,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
                   placeholder="Ex: sm64-port"
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-[2px] text-white outline-none"
+                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-md text-white outline-none"
                 />
               </div>
 
@@ -302,7 +302,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
                       else if (opt.badge === 'PS1' || opt.badge === 'PS2') setRomExtension('.iso')
                     }
                   }}
-                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-[2px] text-white outline-none"
+                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-md text-white outline-none"
                 >
                   {CONSOLE_OPTIONS.map((c) => (
                     <option key={c.badge} value={c.badge}>
@@ -321,7 +321,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
                   placeholder="Ex: .z64, .iso, .bin"
                   value={romExtension}
                   onChange={(e) => setRomExtension(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-[2px] text-white outline-none"
+                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-md text-white outline-none"
                 />
               </div>
             </div>
@@ -333,7 +333,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
               <select
                 value={toolchain}
                 onChange={(e) => setToolchain(e.target.value)}
-                className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-[2px] text-white outline-none"
+                className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-md text-white outline-none"
               >
                 {TOOLCHAIN_OPTIONS.map((t) => (
                   <option key={t} value={t}>
@@ -352,7 +352,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
                 placeholder="Explique resumidamente o que é este port e seus recursos principais (60 FPS, widescreen, etc.)."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-[2px] text-white outline-none resize-none"
+                className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-md text-white outline-none resize-none"
               />
             </div>
 
@@ -366,7 +366,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
                   placeholder="@seu_usuario"
                   value={submittedBy}
                   onChange={(e) => setSubmittedBy(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-[2px] text-white outline-none"
+                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-md text-white outline-none"
                 />
               </div>
 
@@ -379,7 +379,7 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
                   placeholder="Instruções ou dependências específicas"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-[2px] text-white outline-none"
+                  className="w-full px-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-md text-white outline-none"
                 />
               </div>
             </div>
@@ -394,14 +394,14 @@ export const SubmitPortModal: React.FC<SubmitPortModalProps> = ({
                 <button
                   type="button"
                   onClick={handleResetAndClose}
-                  className="px-4 py-2 bg-[#253241] hover:bg-[#314256] text-white font-bold uppercase text-[11px] tracking-wider rounded-[2px]"
+                  className="px-4 py-2 bg-[#253241] hover:bg-[#314256] text-white font-bold uppercase text-[11px] tracking-wider rounded-md"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={!githubUrl.trim() || !title.trim()}
-                  className="steam-btn-blue px-5 py-2 text-white font-bold uppercase text-[11px] tracking-wider rounded-[2px] shadow flex items-center gap-1.5 disabled:opacity-50"
+                  className="steam-btn-blue px-5 py-2 text-white font-bold uppercase text-[11px] tracking-wider rounded-md shadow flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <span>Enviar para Aprovação</span>
                   <ExternalLink className="w-3.5 h-3.5" />

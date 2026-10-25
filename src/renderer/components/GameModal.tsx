@@ -20,9 +20,10 @@ import {
   Layers,
   Cpu,
   Sparkles,
-  Gamepad2,
   AlertCircle
 } from 'lucide-react'
+import { CoverFallback } from './CoverFallback'
+import { familyLabel } from '../lib/ui'
 import {
   CatalogGame,
   DownloadTaskProgress,
@@ -295,70 +296,69 @@ export const GameModal: React.FC<GameModalProps> = ({
 
   return (
     <div className="min-h-full steam-main-gradient text-[#dcdedf] flex flex-col">
-      {/* 1. Steam Hero Artwork Header */}
-      <div className="relative h-56 w-full bg-[#0e141c] overflow-hidden border-b border-[#283444] shrink-0">
+      {/* 1. Cabeçalho com arte */}
+      <div className="relative w-full min-h-[15rem] bg-[#0e141c] overflow-hidden border-b border-[#283444] shrink-0">
         {activeGame.imageUrl && !imgError && (
-          <img
-            src={activeGame.imageUrl}
-            alt=""
-            onError={() => setImgError(true)}
-            className="absolute inset-0 w-full h-full object-cover blur-xl opacity-30 scale-110 pointer-events-none"
+          <div
+            className="rh-hero-backdrop"
+            style={{ backgroundImage: `url("${activeGame.imageUrl}")` }}
+            aria-hidden="true"
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#171d25] via-[#171d25]/60 to-transparent" />
+        <div className="rh-hero-fade" aria-hidden="true" />
 
-        {/* Back Button */}
         <div className="relative z-10 px-6 pt-4">
           <button
+            type="button"
             onClick={onClose}
-            className="px-3 py-1 bg-[#171a21]/80 hover:bg-[#2a3846] border border-[#324254] rounded-[2px] text-xs font-semibold uppercase tracking-wider text-[#c7d5e0] flex items-center gap-1.5 transition-colors"
+            className="rh-btn rh-btn-ghost px-3 min-h-[32px] text-[11px] bg-black/30"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Voltar para a Grade</span>
+            <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Voltar</span>
           </button>
         </div>
 
-        {/* Game Title & Poster Overlay */}
-        <div className="absolute bottom-4 left-6 right-6 z-10 flex items-end gap-5">
-          <div className="w-24 h-24 rounded-[3px] bg-[#12171e] border border-[#37495e] shadow-xl overflow-hidden shrink-0 flex items-center justify-center">
+        <div className="relative z-10 px-6 pt-5 pb-6 flex items-end gap-6">
+          <div className="w-[132px] h-[132px] rounded-xl bg-[#0b1017]/80 ring-1 ring-white/10 shadow-[0_18px_40px_-12px_rgba(0,0,0,0.8)] overflow-hidden shrink-0 flex items-center justify-center">
             {activeGame.imageUrl && !imgError ? (
               <img
                 src={activeGame.imageUrl}
                 alt={activeGame.title}
                 onError={() => setImgError(true)}
-                className="w-full h-full object-cover"
+                className="max-w-[90%] max-h-[90%] object-contain"
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#1a2330] to-[#121820] text-[#67c1f5]">
-                <Gamepad2 className="w-8 h-8 mb-1 opacity-70" />
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#96a6b8]">
-                  {activeGame.consoleBadge}
-                </span>
-              </div>
+              <CoverFallback title={activeGame.title} consoleBadge={activeGame.consoleBadge} />
             )}
           </div>
 
           <div className="min-w-0 pb-0.5">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="px-2 py-0.5 bg-[#1a9fff]/20 border border-[#1a9fff]/40 text-[#67c1f5] text-[10px] font-bold uppercase tracking-wider rounded-[2px]">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="px-2 py-0.5 bg-[#1a9fff]/20 text-[#66c0f4] text-[10px] font-bold uppercase tracking-wider rounded-lg">
                 {activeGame.console}
               </span>
-              <span className="px-2 py-0.5 bg-[#232f3e] border border-[#35465c] text-[#96a6b8] text-[10px] font-mono uppercase rounded-[2px]">
-                {recipe?.family || activeGame.inferredFamily}
+              <span className="px-2 py-0.5 bg-white/10 text-[#c7d5e0] text-[10px] font-semibold uppercase tracking-wider rounded-lg">
+                {familyLabel(recipe?.family || activeGame.inferredFamily)}
               </span>
+              {activeGame.isCommunity && (
+                <span className="px-2 py-0.5 bg-[#142a40] text-[#7ebaf5] text-[10px] font-bold uppercase tracking-wider rounded-lg">
+                  Comunidade
+                </span>
+              )}
               {hasMultiPorts && (
-                <span className="px-2 py-0.5 bg-[#172e44] border border-[#1a9fff]/60 text-[#67c1f5] text-[10px] font-bold uppercase tracking-wider rounded-[2px] flex items-center gap-1">
-                  <Layers className="w-3 h-3 text-[#1a9fff]" />
-                  <span>{ports.length} PORTS DISPONÍVEIS</span>
+                <span className="px-2 py-0.5 bg-[#172e44] text-[#66c0f4] text-[10px] font-bold uppercase tracking-wider rounded-lg flex items-center gap-1">
+                  <Layers className="w-3 h-3" aria-hidden="true" />
+                  <span>{ports.length} ports disponíveis</span>
                 </span>
               )}
             </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight truncate drop-shadow">
+            <h1 className="text-3xl font-black text-white tracking-tight leading-tight drop-shadow line-clamp-2">
               {game.title}
             </h1>
-            <p className="text-xs text-[#8f98a0] mt-0.5">
-              Port Ativo: <strong className="text-[#c7d5e0]">{activeGame.projectName}</strong> • Repositório:{' '}
-              <span className="font-mono text-[#67c1f5]">{activeGame.repoFullName}</span>
+            <p className="text-xs text-[#8f98a0] mt-1.5">
+              Port ativo: <strong className="text-[#c7d5e0]">{activeGame.projectName}</strong>
+              {' · '}
+              <span className="font-mono text-[#66c0f4]">{activeGame.repoFullName}</span>
             </p>
           </div>
         </div>
@@ -369,7 +369,7 @@ export const GameModal: React.FC<GameModalProps> = ({
         <div className="bg-[#141d27] border-b border-[#253547] px-6 py-4 shadow-inner">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-[2px] bg-[#1a9fff]/20 border border-[#1a9fff]/40 text-[#67c1f5] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <span className="px-2 py-0.5 rounded-md bg-[#1a9fff]/20 border border-[#1a9fff]/40 text-[#67c1f5] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5" />
                 VERSÕES &amp; PORTS DISPONÍVEIS NO GITHUB ({ports.length})
               </span>
@@ -391,7 +391,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                 <div
                   key={port.id}
                   onClick={() => setSelectedPortId(port.id)}
-                  className={`p-3.5 rounded-[3px] border cursor-pointer transition-all duration-150 flex flex-col justify-between ${
+                  className={`p-3.5 rounded-lg border cursor-pointer transition-all duration-150 flex flex-col justify-between ${
                     isSelected
                       ? 'bg-[#1b2b3d] border-[#1a9fff] shadow-[0_0_14px_rgba(26,159,255,0.25)] ring-1 ring-[#1a9fff]/60'
                       : 'bg-[#16202c] hover:bg-[#1a2634] border-[#26374a] hover:border-[#3d5775]'
@@ -410,7 +410,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                           </h3>
                           {isPortInstalled && (
                             <span
-                              className={`px-1.5 py-0.2 rounded-[2px] text-[9px] font-bold uppercase ${
+                              className={`px-1.5 py-0.2 rounded-md text-[9px] font-bold uppercase ${
                                 isRunning
                                   ? 'bg-[#5c7e10] text-white animate-pulse'
                                   : 'bg-[#2b4c1c] text-[#a3e635] border border-[#3b6b25]'
@@ -427,7 +427,7 @@ export const GameModal: React.FC<GameModalProps> = ({
 
                       <div className="shrink-0">
                         <span
-                          className={`px-2 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider ${
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                             isSelected
                               ? 'bg-[#1a9fff] text-white shadow-sm'
                               : 'bg-[#212f3f] text-[#8f98a0] border border-[#2f4258]'
@@ -440,7 +440,7 @@ export const GameModal: React.FC<GameModalProps> = ({
 
                     {/* Toolchain Badge */}
                     <div className="mb-2">
-                      <span className="inline-block px-1.5 py-0.5 rounded-[2px] bg-[#111720] border border-[#233345] text-[#8fa7c0] text-[10px] font-semibold">
+                      <span className="inline-block px-1.5 py-0.5 rounded-md bg-[#111720] border border-[#233345] text-[#8fa7c0] text-[10px] font-semibold">
                         {port.toolchainType}
                       </span>
                     </div>
@@ -457,7 +457,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                       {port.highlights.slice(0, 3).map((hl, idx) => (
                         <span
                           key={idx}
-                          className="px-1.5 py-0.2 rounded-[2px] bg-[#111822] text-[#67c1f5] text-[9.5px]"
+                          className="px-1.5 py-0.2 rounded-md bg-[#111822] text-[#67c1f5] text-[9.5px]"
                         >
                           • {hl}
                         </span>
@@ -479,7 +479,7 @@ export const GameModal: React.FC<GameModalProps> = ({
             activeInstalled.status === 'RUNNING' ? (
               <button
                 onClick={() => onStop(activeGame.id)}
-                className="px-8 py-2.5 rounded-[2px] bg-[#c93838] hover:bg-[#e04343] text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow"
+                className="px-8 py-2.5 rounded-md bg-[#c93838] hover:bg-[#e04343] text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow"
               >
                 <Square className="w-4 h-4 fill-current" />
                 <span>PARAR</span>
@@ -488,7 +488,7 @@ export const GameModal: React.FC<GameModalProps> = ({
               <button
                 onClick={handleLaunchClick}
                 disabled={actionBusy}
-                className="steam-btn-green px-9 py-2.5 rounded-[2px] text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow-md"
+                className="steam-btn-green px-9 py-2.5 rounded-md text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow-md"
               >
                 <Play className="w-4 h-4 fill-current" />
                 <span>
@@ -500,7 +500,7 @@ export const GameModal: React.FC<GameModalProps> = ({
             <button
               onClick={handleInstallClick}
               disabled={actionBusy || isDownloading || Boolean(releaseError)}
-              className="steam-btn-blue px-8 py-2.5 rounded-[2px] text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow-md disabled:opacity-50"
+              className="steam-btn-blue px-8 py-2.5 rounded-md text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow-md disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
               <span>
@@ -576,7 +576,7 @@ export const GameModal: React.FC<GameModalProps> = ({
             <button
               onClick={handleToggleFullscreen}
               title="Alternar entre Iniciar em Tela Cheia (Borderless) ou Modo Janela"
-              className={`px-3 py-2 rounded-[2px] border text-xs font-semibold flex items-center gap-1.5 ${
+              className={`px-3 py-2 rounded-md border text-xs font-semibold flex items-center gap-1.5 ${
                 isFullscreenEnabled
                   ? 'bg-[#1d354d] hover:bg-[#254463] border-[#35638f] text-[#67c1f5]'
                   : 'bg-[#2a3846] hover:bg-[#36495c] border-[#3a4d63] text-[#dcdedf]'
@@ -595,7 +595,7 @@ export const GameModal: React.FC<GameModalProps> = ({
             onClick={() => handleImportRom()}
             disabled={actionBusy}
             title="Escolher ou alterar arquivo da ISO / ROM (.iso, .z64, .bin, .zip, .7z, .rar)"
-            className="px-3 py-2 rounded-[2px] bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-xs font-semibold text-[#dcdedf] flex items-center gap-1.5"
+            className="px-3 py-2 rounded-md bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-xs font-semibold text-[#dcdedf] flex items-center gap-1.5"
           >
             <FolderSearch className="w-3.5 h-3.5 text-[#67c1f5]" />
             <span>Definir ISO / ROM</span>
@@ -606,7 +606,7 @@ export const GameModal: React.FC<GameModalProps> = ({
               <button
                 onClick={() => window.api.openGameFolder(activeGame.id)}
                 title="Explorar arquivos locais instalados"
-                className="p-2 rounded-[2px] bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#c7d5e0]"
+                className="p-2 rounded-md bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#c7d5e0]"
               >
                 <FolderOpen className="w-4 h-4" />
               </button>
@@ -626,7 +626,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                 }}
                 disabled={actionBusy}
                 title="Reaplicar receita pós-instalação"
-                className="p-2 rounded-[2px] bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#c7d5e0]"
+                className="p-2 rounded-md bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#c7d5e0]"
               >
                 <RefreshCw
                   className={`w-4 h-4 ${actionBusy ? 'animate-spin' : ''}`}
@@ -636,7 +636,7 @@ export const GameModal: React.FC<GameModalProps> = ({
               <button
                 onClick={() => window.api.selectExecutableManually(activeGame.id)}
                 title="Selecionar executável manualmente"
-                className="p-2 rounded-[2px] bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#c7d5e0]"
+                className="p-2 rounded-md bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#c7d5e0]"
               >
                 <Settings2 className="w-4 h-4" />
               </button>
@@ -648,7 +648,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                 }}
                 disabled={actionBusy}
                 title="Desinstalar jogo e/ou excluir ISO do computador"
-                className="p-2 rounded-[2px] bg-[#2a3846] hover:bg-[#7a2828] border border-[#3a4d63] text-[#c7d5e0] hover:text-white"
+                className="p-2 rounded-md bg-[#2a3846] hover:bg-[#7a2828] border border-[#3a4d63] text-[#c7d5e0] hover:text-white"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -690,14 +690,14 @@ export const GameModal: React.FC<GameModalProps> = ({
       {/* Alerts */}
       <div className="px-6 pt-4 space-y-3">
         {(launchError || activeLastTask?.stage === 'ERROR') && (
-          <div className="p-3 rounded-[2px] bg-[#4c1d1d] border border-[#8c3232] text-xs text-red-100 flex items-center gap-2.5">
+          <div className="p-3 rounded-md bg-[#4c1d1d] border border-[#8c3232] text-xs text-red-100 flex items-center gap-2.5">
             <AlertTriangle className="w-4 h-4 text-red-300 shrink-0" />
             <span>{launchError || activeLastTask?.error}</span>
           </div>
         )}
 
         {busyMessage && (
-          <div className="p-3 rounded-[2px] bg-[#1b334b] border border-[#2f5d8a] text-xs text-[#c7d5e0] flex items-center gap-2.5">
+          <div className="p-3 rounded-md bg-[#1b334b] border border-[#2f5d8a] text-xs text-[#c7d5e0] flex items-center gap-2.5">
             <RefreshCw className="w-4 h-4 text-[#1a9fff] animate-spin shrink-0" />
             <span>{busyMessage}</span>
           </div>
@@ -709,7 +709,7 @@ export const GameModal: React.FC<GameModalProps> = ({
         {/* Left 2 Columns: Port Details, ISO/ROM Configuration & Recipe Logs */}
         <div className="lg:col-span-2 space-y-5">
           {/* Detailed Port Explanation & Differences Card */}
-          <div className="bg-[#161f29] border border-[#263545] rounded-[3px] p-4 space-y-3.5 shadow-sm">
+          <div className="bg-[#161f29] border border-[#263545] rounded-lg p-4 space-y-3.5 shadow-sm">
             <div className="flex items-center justify-between border-b border-[#253342] pb-2.5">
               <h2 className="text-xs font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-2">
                 <Cpu className="w-4 h-4" />
@@ -740,7 +740,7 @@ export const GameModal: React.FC<GameModalProps> = ({
               </div>
 
               {activeGame.differences && (
-                <div className="p-3 rounded-[2px] bg-[#121c27] border border-[#1e3248] space-y-1">
+                <div className="p-3 rounded-md bg-[#121c27] border border-[#1e3248] space-y-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-[#1a9fff]" />
                     DIFERENÇAS &amp; PONTOS FORTES DESTE PORT
@@ -760,7 +760,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                     {activeGame.highlights.map((hl, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center gap-2 text-[#dcdedf] bg-[#111720] px-3 py-2 rounded-[2px] border border-[#202c3b]"
+                        className="flex items-center gap-2 text-[#dcdedf] bg-[#111720] px-3 py-2 rounded-md border border-[#202c3b]"
                       >
                         <span className="text-[#1a9fff] font-bold">✓</span>
                         <span className="text-[11.5px] leading-tight">{hl}</span>
@@ -773,7 +773,7 @@ export const GameModal: React.FC<GameModalProps> = ({
           </div>
 
           {/* ISO / ROM Path Configuration Box */}
-          <div className="bg-[#161f29] border border-[#263545] rounded-[3px] p-4 space-y-3">
+          <div className="bg-[#161f29] border border-[#263545] rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-[#253342] pb-2.5">
               <h2 className="text-xs font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-2">
                 <HardDrive className="w-4 h-4" />
@@ -801,7 +801,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                 return (
                   <div
                     key={req.id}
-                    className={`p-3.5 rounded-[2px] border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    className={`p-3.5 rounded-md border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                       isReady
                         ? 'bg-[#1a2923] border-[#315941]'
                         : 'bg-[#211f1a] border-[#614a21]'
@@ -812,7 +812,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                         <span className="text-xs font-bold text-white">
                           {req.label}
                         </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 bg-black/30 text-[#8f98a0] rounded-[2px]">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 bg-black/30 text-[#8f98a0] rounded-md">
                           {req.extensions.join(' ')} | .zip .7z .rar
                         </span>
                       </div>
@@ -852,7 +852,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                       <button
                         onClick={() => handleImportRom(req.id)}
                         disabled={actionBusy}
-                        className={`px-3.5 py-2 rounded-[2px] text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 ${
+                        className={`px-3.5 py-2 rounded-md text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 ${
                           isReady
                             ? 'bg-[#2a3846] hover:bg-[#384b5e] text-[#dcdedf] border border-[#3e5268]'
                             : 'steam-btn-blue text-white shadow'
@@ -871,7 +871,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                           }
                           disabled={actionBusy}
                           title="Excluir este arquivo de ISO/ROM do computador"
-                          className="p-2 rounded-[2px] bg-[#362020] hover:bg-[#7a2828] border border-[#5e3232] text-red-200 hover:text-white"
+                          className="p-2 rounded-md bg-[#362020] hover:bg-[#7a2828] border border-[#5e3232] text-red-200 hover:text-white"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -884,14 +884,14 @@ export const GameModal: React.FC<GameModalProps> = ({
           </div>
 
           {/* Recipe & Post-Install Log Box */}
-          <div className="bg-[#161f29] border border-[#263545] rounded-[3px] p-4 space-y-3">
+          <div className="bg-[#161f29] border border-[#263545] rounded-lg p-4 space-y-3">
             <h2 className="text-xs font-bold uppercase tracking-wider text-[#67c1f5] border-b border-[#253342] pb-2">
               AUTOMAÇÃO DE RECEITA ({recipe?.family || activeGame.inferredFamily})
             </h2>
             <p className="text-xs text-[#c7d5e0] leading-relaxed">
               {recipe?.notes}
             </p>
-            <div className="text-[11px] text-[#8f98a0] bg-[#111922] border border-[#223040] px-3 py-2 rounded-[2px]">
+            <div className="text-[11px] text-[#8f98a0] bg-[#111922] border border-[#223040] px-3 py-2 rounded-md">
               <strong className="text-[#67c1f5]">Atalhos durante o jogo:</strong>{' '}
               Clique no botão <strong>Maximizar</strong> da janela ou pressione{' '}
               <kbd className="px-1.5 py-0.5 bg-[#1e2b3a] text-white rounded text-[10px]">
@@ -909,7 +909,7 @@ export const GameModal: React.FC<GameModalProps> = ({
             </div>
 
             {activeInstalled && activeInstalled.recipeLogs.length > 0 && (
-              <div className="p-3 bg-[#0e141b] border border-[#223040] rounded-[2px] font-mono text-[11px] text-[#8f98a0] max-h-44 overflow-y-auto space-y-1">
+              <div className="p-3 bg-[#0e141b] border border-[#223040] rounded-md font-mono text-[11px] text-[#8f98a0] max-h-44 overflow-y-auto space-y-1">
                 {activeInstalled.recipeLogs.map((line, idx) => (
                   <div key={idx}>{line}</div>
                 ))}
@@ -920,7 +920,7 @@ export const GameModal: React.FC<GameModalProps> = ({
 
         {/* Right Column: Release & System Metadata */}
         <div className="space-y-5">
-          <div className="bg-[#161f29] border border-[#263545] rounded-[3px] p-4 space-y-3">
+          <div className="bg-[#161f29] border border-[#263545] rounded-lg p-4 space-y-3">
             <h2 className="text-xs font-bold uppercase tracking-wider text-[#67c1f5] border-b border-[#253342] pb-2">
               INFORMAÇÕES DO PACOTE (GITHUB)
             </h2>
@@ -930,7 +930,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                 Consultando última release no GitHub...
               </p>
             ) : releaseError ? (
-              <div className="space-y-2 p-3 bg-[#241a12] border border-[#6b4718] rounded-[2px]">
+              <div className="space-y-2 p-3 bg-[#241a12] border border-[#6b4718] rounded-md">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-[#ffc875]">
                   <AlertCircle className="w-4 h-4 text-[#ffc875] shrink-0" />
                   <span>Releases não encontradas no GitHub</span>
@@ -981,7 +981,7 @@ export const GameModal: React.FC<GameModalProps> = ({
             <div className="pt-2 border-t border-[#253342] flex flex-col gap-1.5">
               <button
                 onClick={() => window.api.openExternalUrl(activeGame.githubUrl)}
-                className="w-full px-3 py-1.5 bg-[#212d3b] hover:bg-[#2c3c4f] text-[#67c1f5] text-xs font-medium rounded-[2px] flex items-center justify-between"
+                className="w-full px-3 py-1.5 bg-[#212d3b] hover:bg-[#2c3c4f] text-[#67c1f5] text-xs font-medium rounded-md flex items-center justify-between"
               >
                 <span>Ver Repositório no GitHub</span>
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -990,7 +990,7 @@ export const GameModal: React.FC<GameModalProps> = ({
               {activeGame.websiteUrl && (
                 <button
                   onClick={() => window.api.openExternalUrl(activeGame.websiteUrl!)}
-                  className="w-full px-3 py-1.5 bg-[#212d3b] hover:bg-[#2c3c4f] text-[#67c1f5] text-xs font-medium rounded-[2px] flex items-center justify-between"
+                  className="w-full px-3 py-1.5 bg-[#212d3b] hover:bg-[#2c3c4f] text-[#67c1f5] text-xs font-medium rounded-md flex items-center justify-between"
                 >
                   <span>Site Oficial do Projeto</span>
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -1004,7 +1004,7 @@ export const GameModal: React.FC<GameModalProps> = ({
       {/* Steam Uninstall Confirmation Modal */}
       {showUninstallModal && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[#1b2838] border border-[#354c66] rounded-[3px] shadow-2xl overflow-hidden">
+          <div className="w-full max-w-md bg-[#1b2838] border border-[#354c66] rounded-lg shadow-2xl overflow-hidden">
             <div className="px-5 py-3.5 bg-[#171d25] border-b border-[#2a3846] flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white">
                 <Trash2 className="w-4 h-4 text-red-400" />
@@ -1024,7 +1024,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                 <strong className="text-white">{activeGame.title} ({activeGame.projectName})</strong> do seu computador.
               </p>
 
-              <label className="p-3.5 rounded-[2px] bg-[#131c27] border border-[#2a3c52] flex items-start gap-3 cursor-pointer select-none hover:border-[#416082]">
+              <label className="p-3.5 rounded-md bg-[#131c27] border border-[#2a3c52] flex items-start gap-3 cursor-pointer select-none hover:border-[#416082]">
                 <input
                   type="checkbox"
                   checked={deleteIsoToo}
@@ -1052,7 +1052,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                 <button
                   onClick={() => setShowUninstallModal(false)}
                   disabled={actionBusy}
-                  className="px-4 py-2 rounded-[2px] bg-[#2a3846] hover:bg-[#37495b] text-xs font-bold uppercase tracking-wider text-[#dcdedf]"
+                  className="px-4 py-2 rounded-md bg-[#2a3846] hover:bg-[#37495b] text-xs font-bold uppercase tracking-wider text-[#dcdedf]"
                 >
                   Cancelar
                 </button>
@@ -1071,7 +1071,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                     }
                   }}
                   disabled={actionBusy}
-                  className="px-5 py-2 rounded-[2px] bg-[#b83232] hover:bg-[#d43b3b] text-xs font-bold uppercase tracking-wider text-white shadow"
+                  className="px-5 py-2 rounded-md bg-[#b83232] hover:bg-[#d43b3b] text-xs font-bold uppercase tracking-wider text-white shadow"
                 >
                   {actionBusy ? 'Excluindo...' : 'Confirmar Exclusão'}
                 </button>

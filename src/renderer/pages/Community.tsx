@@ -5,15 +5,13 @@ import {
   RefreshCw,
   PlusCircle,
   ShieldCheck,
-  Sparkles,
-  ExternalLink
+  X,
+  GitBranch,
+  HardDrive,
+  Lightbulb
 } from 'lucide-react'
-import {
-  CatalogGame,
-  DownloadTaskProgress,
-  InstalledGame
-} from '../../shared/types'
-import { GameCard } from '../components/GameCard'
+import { CatalogGame, DownloadTaskProgress, InstalledGame } from '../../shared/types'
+import { GameGrid } from '../components/GameGrid'
 import { SubmitPortModal } from '../components/SubmitPortModal'
 
 interface CommunityProps {
@@ -29,12 +27,28 @@ interface CommunityProps {
   onQuickAction: (game: CatalogGame, e: React.MouseEvent) => void
 }
 
+const STEPS: { icon: React.ReactNode; title: string; text: string }[] = [
+  {
+    icon: <GitBranch className="w-4 h-4" aria-hidden="true" />,
+    title: 'Ports reais do GitHub',
+    text: 'Só entram recompilações, descompilações e ports nativos de jogos, com release pronta para Windows ou Linux.'
+  },
+  {
+    icon: <HardDrive className="w-4 h-4" aria-hidden="true" />,
+    title: 'A ISO/ROM é sua',
+    text: 'Nada de jogo é baixado. Você aponta o seu arquivo e o RecompHUB cuida do resto, igual ao catálogo do PortsDR.'
+  },
+  {
+    icon: <Lightbulb className="w-4 h-4" aria-hidden="true" />,
+    title: 'Sugira o próximo',
+    text: 'Achou um port que ainda não está aqui? Cole o link do repositório e ele vai para a fila de aprovação.'
+  }
+]
+
 export const Community: React.FC<CommunityProps> = ({
   ports,
   library,
   downloads,
-  lastUpdated,
-  source,
   isRefreshing,
   hostPlatform,
   onRefresh,
@@ -56,35 +70,13 @@ export const Community: React.FC<CommunityProps> = ({
       .map(([name, count]) => ({ name, count }))
   }, [ports])
 
-  const installedByGameId = useMemo(() => {
-    const map = new Map<string, InstalledGame>()
-    for (const item of library) {
-      map.set(item.gameId, item)
-    }
-    return map
-  }, [library])
-
-  const activeDownloadByGameId = useMemo(() => {
-    const map = new Map<string, DownloadTaskProgress>()
-    for (const d of downloads) {
-      if (!['READY_TO_PLAY', 'NEEDS_ROM', 'ERROR'].includes(d.stage)) {
-        map.set(d.gameId, d)
-      }
-    }
-    return map
-  }, [downloads])
+  const hasVerified = useMemo(() => ports.some((p) => p.verificationLevel === 'verified'), [ports])
 
   const filteredPorts = useMemo(() => {
     const q = search.trim().toLowerCase()
     return ports.filter((p) => {
-      if (selectedConsole !== 'ALL' && p.consoleBadge !== selectedConsole) {
-        return false
-      }
-
-      if (selectedLevel !== 'ALL' && p.verificationLevel !== selectedLevel) {
-        return false
-      }
-
+      if (selectedConsole !== 'ALL' && p.consoleBadge !== selectedConsole) return false
+      if (selectedLevel !== 'ALL' && p.verificationLevel !== selectedLevel) return false
       if (q) {
         const portsKeywords = p.ports
           ? p.ports.map((item) => `${item.projectName} ${item.repoFullName}`).join(' ')
@@ -93,187 +85,175 @@ export const Community: React.FC<CommunityProps> = ({
           `${p.title} ${p.projectName} ${p.repoFullName} ${p.console} ${p.consoleBadge} ${p.submittedBy || ''} ${portsKeywords}`.toLowerCase()
         if (!hay.includes(q)) return false
       }
-
       return true
     })
   }, [ports, search, selectedConsole, selectedLevel])
 
-  const levelOptions: { id: string; label: string }[] = [
-    { id: 'ALL', label: 'TODOS OS SELOS' },
-    { id: 'verified', label: '🛡️ VERIFICADOS' },
-    { id: 'community', label: '👥 COMUNIDADE' }
-  ]
-
   return (
     <div className="min-h-full steam-main-gradient flex flex-col">
-      {/* 1. Steam Hero Artwork Header for Community */}
-      <div className="bg-gradient-to-r from-[#142334] via-[#1b2b3d] to-[#121c27] border-b border-[#293d54] px-6 py-6 shadow-md">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-[2px] bg-[#1a9fff]/20 border border-[#1a9fff]/40 text-[#67c1f5] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5" />
-                CENTRAL DA COMUNIDADE
-              </span>
-              <span className="text-[11px] text-[#8f98a0]">
-                {ports.length} ports aprovados pela moderação
-              </span>
-            </div>
-
-            <h1 className="text-xl font-bold uppercase tracking-wide text-white flex items-center gap-2">
-              <span>JOGOS &amp; PORTS DA COMUNIDADE</span>
-            </h1>
-
-            <p className="text-xs text-[#9eb5ce] max-w-2xl leading-relaxed">
-              Ports do GitHub sugeridos pela comunidade para incluir jogos que ainda não estão no catálogo do PortsDR. Qualquer pessoa pode indicar o link do GitHub de um novo port; após a nossa aprovação, o jogo entra automaticamente para todos os usuários do RecompHUB.
+      {/* Cabeçalho */}
+      <div className="relative overflow-hidden border-b border-[#243448] px-8 py-8">
+        <div
+          className="absolute inset-0 bg-[radial-gradient(ellipse_at_85%_0%,rgba(26,159,255,0.22),transparent_60%),linear-gradient(90deg,#142334,#17202b)]"
+          aria-hidden="true"
+        />
+        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-2 max-w-2xl">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[3px] bg-[#1a9fff]/20 text-[#66c0f4] text-[10px] font-bold uppercase tracking-wider">
+              <Users className="w-3.5 h-3.5" aria-hidden="true" />
+              Central da comunidade · {ports.length} {ports.length === 1 ? 'jogo' : 'jogos'}
+            </span>
+            <h1 className="text-2xl font-black text-white tracking-tight">Ports da comunidade</h1>
+            <p className="text-[13px] text-[#a9bacb] leading-relaxed">
+              Ports, recompilações e descompilações do GitHub que ainda não estão no PortsDR. Qualquer
+              pessoa pode sugerir um link; depois de aprovado, o jogo aparece aqui para todo mundo.
             </p>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex items-center gap-2.5 shrink-0">
             <button
+              type="button"
               onClick={() => setIsSubmitModalOpen(true)}
-              className="steam-btn-blue px-4 py-2.5 rounded-[2px] text-white text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-lg"
+              className="rh-btn rh-btn-install px-5 min-h-[40px] text-xs"
             >
-              <PlusCircle className="w-4 h-4" />
-              <span>Sugerir Novo Port</span>
+              <PlusCircle className="w-4 h-4" aria-hidden="true" />
+              <span>Sugerir novo port</span>
             </button>
-
             <button
+              type="button"
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="p-2.5 rounded-[2px] bg-[#212f3f] hover:bg-[#2c3d52] border border-[#334b66] text-[#c7d5e0] disabled:opacity-50"
+              aria-label="Sincronizar ports da comunidade"
               title="Sincronizar ports da comunidade com o GitHub"
+              className="rh-btn rh-btn-ghost w-10 min-h-[40px] disabled:opacity-60"
             >
               <RefreshCw
                 className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-[#1a9fff]' : ''}`}
+                aria-hidden="true"
               />
             </button>
           </div>
         </div>
+
+        <ol className="relative grid grid-cols-1 md:grid-cols-3 gap-3 mt-6">
+          {STEPS.map((step, i) => (
+            <li
+              key={step.title}
+              className="flex gap-3 p-3.5 rounded-lg bg-[#0e141b]/55 ring-1 ring-white/[0.06]"
+            >
+              <span className="shrink-0 w-8 h-8 rounded-full bg-[#1a9fff]/15 text-[#66c0f4] flex items-center justify-center">
+                {step.icon}
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-[12px] font-bold text-white">
+                  {i + 1}. {step.title}
+                </h2>
+                <p className="text-[11.5px] text-[#8f98a0] leading-snug mt-0.5">{step.text}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
       </div>
 
-      {/* 2. Steam Shelf Filters Bar */}
-      <div className="bg-[#17202c] border-b border-[#253446] px-6 py-2.5 space-y-2">
+      {/* Filtros */}
+      <div className="sticky top-0 z-30 bg-[#141b24]/95 backdrop-blur border-b border-[#243448] px-6 py-3 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          {/* Search Input */}
           <div className="relative flex-1 max-w-md">
-            <Search className="w-3.5 h-3.5 text-[#67707b] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search
+              className="w-4 h-4 text-[#67707b] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              aria-hidden="true"
+            />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por título, autor (@) ou projeto..."
-              className="w-full pl-9 pr-3 py-1.5 bg-[#10161f] border border-[#2b3c4f] focus:border-[#1a9fff] rounded-[2px] text-xs text-[#dcdedf] placeholder-[#67707b] outline-none shadow-inner"
+              placeholder="Buscar por jogo, projeto ou autor…"
+              aria-label="Buscar nos ports da comunidade"
+              className="w-full pl-9 pr-8 min-h-[34px] bg-[#0e141b] border border-[#2c3b4d] focus:border-[#1a9fff] rounded-md text-xs text-[#dcdedf] placeholder-[#67707b] outline-none transition-colors"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                aria-label="Limpar busca"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8f98a0] hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-[#8f98a0]">
-            <span>Exibindo:</span>
-            <strong className="text-white">{filteredPorts.length}</strong>
-            <span>de {ports.length} ports</span>
-          </div>
+          <span className="text-xs text-[#8f98a0]" aria-live="polite">
+            Exibindo <strong className="text-white">{filteredPorts.length}</strong> de {ports.length}
+          </span>
         </div>
 
-        {/* Console Filter Sub-tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-[#222d3a]">
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar por console">
           <button
+            type="button"
+            aria-pressed={selectedConsole === 'ALL'}
             onClick={() => setSelectedConsole('ALL')}
-            className={`px-2.5 py-1 rounded-[2px] text-[11px] font-bold uppercase tracking-wider transition-colors ${
-              selectedConsole === 'ALL'
-                ? 'bg-[#1a9fff] text-white shadow-sm'
-                : 'bg-[#1e2835] hover:bg-[#273546] text-[#8f98a0] hover:text-white'
-            }`}
+            className="rh-chip"
           >
-            Todos ({ports.length})
+            Todos <span className="rh-chip-count">{ports.length}</span>
           </button>
-
           {consoles.map((c) => (
             <button
               key={c.name}
+              type="button"
+              aria-pressed={selectedConsole === c.name}
               onClick={() => setSelectedConsole(c.name)}
-              className={`px-2 py-1 rounded-[2px] text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                selectedConsole === c.name
-                  ? 'bg-[#2a475e] text-[#67c1f5] border border-[#3e6688]'
-                  : 'bg-[#1e2835] hover:bg-[#273546] text-[#8f98a0] hover:text-white'
-              }`}
+              className="rh-chip"
             >
-              {c.name} ({c.count})
+              {c.name} <span className="rh-chip-count">{c.count}</span>
             </button>
           ))}
 
-          {/* Level Filter */}
-          <div className="ml-auto flex items-center gap-1">
-            {levelOptions.map((lvl) => (
-              <button
-                key={lvl.id}
-                onClick={() => setSelectedLevel(lvl.id)}
-                className={`px-2 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                  selectedLevel === lvl.id
-                    ? 'bg-[#2b4461] text-[#7ebaf5] border border-[#436994]'
-                    : 'text-[#8f98a0] hover:text-white'
-                }`}
-              >
-                {lvl.label}
-              </button>
-            ))}
-          </div>
+          {hasVerified && (
+            <button
+              type="button"
+              aria-pressed={selectedLevel === 'verified'}
+              onClick={() => setSelectedLevel(selectedLevel === 'verified' ? 'ALL' : 'verified')}
+              className="rh-chip ml-auto"
+              title="Mostrar só ports já testados pela equipe"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+              Verificados
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 3. Community Games Grid */}
+      {/* Grade */}
       <div className="p-6 flex-1">
-        {filteredPorts.length === 0 ? (
-          <div className="p-12 bg-[#16202d] border border-[#263649] rounded-[3px] text-center space-y-3">
-            <Users className="w-10 h-10 text-[#67c1f5]/40 mx-auto" />
-            <h3 className="text-sm font-bold uppercase tracking-wide text-white">
-              Nenhum port da comunidade encontrado
-            </h3>
-            <p className="text-xs text-[#8f98a0] max-w-md mx-auto">
-              Nenhum título corresponde aos filtros atuais. Que tal sugerir o primeiro port para esta plataforma?
-            </p>
-            <div className="pt-2">
+        <GameGrid
+          games={filteredPorts}
+          library={library}
+          downloads={downloads}
+          hostPlatform={hostPlatform}
+          onSelectGame={onSelectGame}
+          onQuickAction={onQuickAction}
+          emptyState={
+            <div className="py-14 px-6 bg-[#16202d] border border-[#263649] rounded-lg text-center space-y-3">
+              <Users className="w-10 h-10 text-[#66c0f4]/40 mx-auto" aria-hidden="true" />
+              <h3 className="text-sm font-bold text-white">Nenhum port da comunidade encontrado</h3>
+              <p className="text-xs text-[#8f98a0] max-w-md mx-auto">
+                Nenhum título corresponde aos filtros atuais. Que tal sugerir o primeiro port para esta plataforma?
+              </p>
               <button
+                type="button"
                 onClick={() => setIsSubmitModalOpen(true)}
-                className="steam-btn-blue px-4 py-2 rounded-[2px] text-white text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5 shadow"
+                className="rh-btn rh-btn-install px-5 min-h-[36px] text-xs"
               >
-                <PlusCircle className="w-3.5 h-3.5" />
-                <span>Sugerir Novo Port</span>
+                <PlusCircle className="w-4 h-4" aria-hidden="true" />
+                <span>Sugerir novo port</span>
               </button>
             </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5">
-            {filteredPorts.map((game) => {
-              const inst =
-                installedByGameId.get(game.id) ||
-                game.ports?.map((p) => installedByGameId.get(p.id)).find(Boolean)
-              const dl =
-                activeDownloadByGameId.get(game.id) ||
-                game.ports?.map((p) => activeDownloadByGameId.get(p.id)).find(Boolean)
-
-              return (
-                <GameCard
-                  key={game.id}
-                  game={game}
-                  installed={inst}
-                  isDownloading={Boolean(dl)}
-                  downloadProgress={dl?.overallProgress}
-                  hostPlatform={hostPlatform}
-                  onSelect={onSelectGame}
-                  onQuickAction={onQuickAction}
-                />
-              )
-            })}
-          </div>
-        )}
+          }
+        />
       </div>
 
-      {/* 4. Submission Modal */}
-      <SubmitPortModal
-        isOpen={isSubmitModalOpen}
-        onClose={() => setIsSubmitModalOpen(false)}
-      />
+      <SubmitPortModal isOpen={isSubmitModalOpen} onClose={() => setIsSubmitModalOpen(false)} />
     </div>
   )
 }

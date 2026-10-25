@@ -1,5 +1,14 @@
-import React, { useEffect, useState } from 'react'
-import { Download, ExternalLink, FolderPlus } from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  Download,
+  ExternalLink,
+  FolderPlus,
+  HardDrive,
+  LayoutGrid,
+  Library as LibraryIcon,
+  Settings as SettingsIcon,
+  Users
+} from 'lucide-react'
 import { Sidebar, NavTab } from './components/Sidebar'
 import { Catalog } from './pages/Catalog'
 import { Community } from './pages/Community'
@@ -74,6 +83,7 @@ export function App(): React.ReactElement {
       setVaultEntries(vaultRes)
       setSettings(setRes)
       setHostPlatform(hostRes.platform)
+      console.log(`[startup] data-loaded epoch=${Date.now()}`)
     } catch (err) {
       console.error('[App] Failed to load initial data:', err)
     } finally {
@@ -101,13 +111,13 @@ export function App(): React.ReactElement {
     })
 
     const unsubCatalog = window.api.onCatalogUpdated((result) => {
-      setCatalog(result.games)
+      if (!result.unchanged) setCatalog(result.games)
       setCatalogSource(result.source)
       setLastUpdated(result.lastUpdated)
     })
 
     const unsubCommunity = window.api.onCommunityUpdated((result) => {
-      setCommunityPorts(result.ports)
+      if (!result.unchanged) setCommunityPorts(result.ports)
       setCommunitySource(result.source)
       setCommunityLastUpdated(result.lastUpdated)
     })
@@ -161,22 +171,26 @@ export function App(): React.ReactElement {
     await window.api.installGame(game.id, pickedRomPath, requirementId)
   }
 
-  const handleQuickAction = async (
-    game: CatalogGame,
-    e: React.MouseEvent
-  ): Promise<void> => {
-    e.stopPropagation()
-    const inst = library.find((i) => i.gameId === game.id)
-    if (inst && inst.status === 'READY_TO_PLAY') {
-      try {
-        await window.api.launchGame(game.id)
-      } catch {
+  // Referência estável: os cards (React.memo) não precisam renderizar de novo a cada atualização de download
+  const libraryRef = useRef(library)
+  libraryRef.current = library
+
+  const handleQuickAction = useCallback(
+    async (game: CatalogGame, e: React.MouseEvent): Promise<void> => {
+      e.stopPropagation()
+      const inst = libraryRef.current.find((i) => i.gameId === game.id)
+      if (inst && inst.status === 'READY_TO_PLAY') {
+        try {
+          await window.api.launchGame(game.id)
+        } catch {
+          setSelectedGame(game)
+        }
+      } else {
         setSelectedGame(game)
       }
-    } else {
-      setSelectedGame(game)
-    }
-  }
+    },
+    []
+  )
 
   const handleLaunchGame = async (gameId: string): Promise<void> => {
     await window.api.launchGame(gameId)
@@ -250,78 +264,86 @@ export function App(): React.ReactElement {
     ? [...downloads].reverse().find((d) => d.gameId === selectedGame.id)
     : undefined
 
-  const topTabs: { id: NavTab; label: string; count?: number; badgeActive?: boolean }[] = [
-    { id: 'catalog', label: 'CATÁLOGO', count: catalog.length },
-    { id: 'community', label: 'COMUNIDADE', count: communityPorts.length },
-    { id: 'library', label: 'BIBLIOTECA', count: library.length },
+  const topTabs: {
+    id: NavTab
+    label: string
+    icon: React.ReactNode
+    count?: number
+    badgeActive?: boolean
+  }[] = [
+    { id: 'catalog', label: 'Catálogo', icon: <LayoutGrid className="w-4 h-4" />, count: catalog.length },
+    { id: 'community', label: 'Comunidade', icon: <Users className="w-4 h-4" />, count: communityPorts.length },
+    { id: 'library', label: 'Biblioteca', icon: <LibraryIcon className="w-4 h-4" />, count: library.length },
     {
       id: 'downloads',
-      label: 'DOWNLOADS',
+      label: 'Downloads',
+      icon: <Download className="w-4 h-4" />,
       count: activeDownloadTasks.length > 0 ? activeDownloadTasks.length : downloads.length,
       badgeActive: activeDownloadTasks.length > 0
     },
-    { id: 'settings', label: 'CONFIGURAÇÕES' }
+    { id: 'settings', label: 'Configurações', icon: <SettingsIcon className="w-4 h-4" /> }
   ]
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#171a21] text-[#dcdedf] overflow-hidden">
-      {/* 1. Steam Top Global Navigation Bar */}
-      <header className="h-12 shrink-0 bg-[#171d25] border-b border-[#28303b] px-5 flex items-center justify-between select-none">
-        <div className="flex items-center gap-8">
-          {/* Brand Logo */}
-          <div
+      {/* 1. Barra superior */}
+      <header className="h-14 shrink-0 bg-gradient-to-b from-[#1d2532] to-[#161c25] border-b border-[#28323f] px-5 flex items-center justify-between select-none">
+        <div className="flex items-center gap-7 min-w-0">
+          <button
+            type="button"
             onClick={() => {
               setSelectedGame(null)
               setActiveTab('catalog')
             }}
-            className="flex items-center gap-2.5 cursor-pointer group"
+            aria-label="RecompHUB — ir para o catálogo"
+            className="flex items-center gap-2.5 group shrink-0"
           >
             <img
               src={appIcon}
-              alt="RecompHUB"
-              className="w-8 h-8 rounded-[4px] object-contain shadow-sm group-hover:scale-105 transition-transform"
+              alt=""
+              className="w-8 h-8 rounded-md object-contain shadow-md group-hover:scale-105 transition-transform"
             />
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-black tracking-wider text-white">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[15px] font-black tracking-wide text-white">
                 Recomp<span className="text-[#1a9fff]">HUB</span>
               </span>
-              <span className="px-1.5 py-0.5 rounded-[2px] bg-[#212934] border border-[#2f3b4a] text-[9px] font-bold uppercase tracking-wider text-[#67c1f5]">
+              <span className="px-1.5 py-0.5 rounded-[3px] bg-[#1a9fff]/15 text-[9px] font-bold uppercase tracking-wider text-[#66c0f4]">
                 beta-0.1
               </span>
             </div>
-          </div>
+          </button>
 
-          {/* Steam Uppercase Navigation Links */}
-          <nav className="flex items-center gap-6">
+          <nav className="flex items-center gap-1" aria-label="Navegação principal">
             {topTabs.map((t) => {
               const isActive = activeTab === t.id && !selectedGame
               return (
                 <button
                   key={t.id}
+                  type="button"
+                  aria-current={isActive ? 'page' : undefined}
                   onClick={() => {
                     setSelectedGame(null)
                     setActiveTab(t.id)
                   }}
-                  className={`relative py-3 text-[13px] font-bold uppercase tracking-wider transition-colors ${
-                    isActive
-                      ? 'text-[#1a9fff]'
-                      : 'text-[#b8bcbf] hover:text-white'
+                  className={`relative flex items-center gap-2 px-3.5 h-14 text-[12px] font-bold uppercase tracking-wider transition-colors ${
+                    isActive ? 'text-white' : 'text-[#9aa5b1] hover:text-white'
                   }`}
                 >
+                  <span className={isActive ? 'text-[#1a9fff]' : ''}>{t.icon}</span>
                   <span>{t.label}</span>
                   {t.count !== undefined && t.count > 0 && (
                     <span
-                      className={`ml-1.5 text-[11px] font-normal ${
+                      className={`min-w-[20px] px-1.5 py-0.5 rounded-full text-[10px] leading-none text-center font-bold ${
                         t.badgeActive
-                          ? 'px-1.5 py-0.5 rounded-[2px] bg-[#1a9fff] text-[#171d25] font-bold animate-pulse'
-                          : 'opacity-75'
+                          ? 'bg-[#1a9fff] text-[#0e141b] animate-pulse'
+                          : 'bg-white/10 text-[#b8c4d0]'
                       }`}
                     >
-                      {t.badgeActive ? t.count : `(${t.count})`}
+                      {t.count}
                     </span>
                   )}
                   {isActive && (
-                    <span className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#1a9fff]" />
+                    <span className="absolute bottom-0 left-2 right-2 h-[3px] rounded-t bg-[#1a9fff] shadow-[0_0_10px_rgba(26,159,255,0.8)]" />
                   )}
                 </button>
               )
@@ -329,12 +351,21 @@ export function App(): React.ReactElement {
           </nav>
         </div>
 
-        {/* Right Top Status */}
-        <div className="flex items-center gap-3 text-xs text-[#8f98a0]">
-          <span className="px-2 py-0.5 bg-[#212934] border border-[#2f3b4a] rounded-[2px] text-[11px]">
-            ISOs/ROMs no Cofre: <strong className="text-white">{vaultEntries.length}</strong>
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedGame(null)
+            setActiveTab('settings')
+          }}
+          title="Arquivos de ISO/ROM guardados no cofre do RecompHUB"
+          className="flex items-center gap-2 px-3 min-h-[32px] rounded-full bg-white/[0.06] hover:bg-white/10 text-[11px] text-[#9aa5b1] transition-colors shrink-0"
+        >
+          <HardDrive className="w-3.5 h-3.5 text-[#66c0f4]" aria-hidden="true" />
+          <span>
+            Cofre: <strong className="text-white">{vaultEntries.length}</strong>{' '}
+            {vaultEntries.length === 1 ? 'arquivo' : 'arquivos'}
           </span>
-        </div>
+        </button>
       </header>
 
       {/* 2. Middle Split Area: Left Steam Game Tree + Right Workspace */}
@@ -348,7 +379,7 @@ export function App(): React.ReactElement {
             setSelectedGame(null)
             setActiveTab(tab)
           }}
-          onSelectGame={(game) => setSelectedGame(game)}
+          onSelectGame={setSelectedGame}
         />
 
         <main className="flex-1 h-full overflow-y-auto bg-[#1b2838]">
@@ -439,7 +470,14 @@ export function App(): React.ReactElement {
       </div>
 
       {/* 3. Steam Bottom Footer Bar */}
-      <footer className="h-9 shrink-0 bg-[#171d25] border-t border-[#28303b] px-4 flex items-center justify-between text-[11px] text-[#8f98a0] select-none">
+      <footer className="relative h-9 shrink-0 bg-[#141a22] border-t border-[#28303b] px-4 flex items-center justify-between text-[11px] text-[#8f98a0] select-none">
+        {activeDownloadTask && (
+          <span
+            className="rh-progress-line"
+            style={{ width: `${activeDownloadTask.overallProgress}%` }}
+            aria-hidden="true"
+          />
+        )}
         <button
           onClick={() => {
             setSelectedGame(null)

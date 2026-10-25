@@ -2,52 +2,301 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ------------------------------------------------------------------ */
+/* Tokens (paleta inspirada no cliente moderno da Steam)               */
+/* ------------------------------------------------------------------ */
+:root {
+  --rh-canvas: #171a21;
+  --rh-bg: #1b2838;
+  --rh-surface: #16202d;
+  --rh-raised: #1e2c3d;
+  --rh-line: #263649;
+  --rh-line-strong: #3a5573;
+  --rh-accent: #1a9fff;
+  --rh-accent-soft: #66c0f4;
+  --rh-ok: #75b022;
+  --rh-warn: #e5a93c;
+  --rh-danger: #c93838;
+  --rh-text: #dcdedf;
+  --rh-muted: #8f98a0;
+  --rh-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 @layer base {
   :root {
     color-scheme: dark;
   }
 
   body {
-    background-color: #171a21;
-    color: #dcdedf;
-    font-family: "Motiva Sans", Arial, Helvetica, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--rh-canvas);
+    color: var(--rh-text);
+    font-family: 'Inter', 'Segoe UI', 'Noto Sans', 'Motiva Sans', system-ui, -apple-system,
+      BlinkMacSystemFont, Roboto, Arial, sans-serif;
     user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Foco visível para navegação por teclado */
+  :focus-visible {
+    outline: 2px solid var(--rh-accent-soft);
+    outline-offset: 2px;
+  }
+
+  button:not(:disabled),
+  [role='button'] {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
   }
 }
 
-/* Steam-style compact scrollbars */
+/* ------------------------------------------------------------------ */
+/* Barras de rolagem                                                   */
+/* ------------------------------------------------------------------ */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #171a21;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3d4450;
-  border-radius: 2px;
+  background: #36404e;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #566070;
+  background: #566274;
+  background-clip: content-box;
+  border: 2px solid transparent;
 }
 
-.steam-btn-green {
-  background: linear-gradient(90deg, #5c7e10 0%, #6fae17 100%);
-}
-.steam-btn-green:hover:not(:disabled) {
-  background: linear-gradient(90deg, #6b9214 0%, #81c71e 100%);
+/* ------------------------------------------------------------------ */
+/* Botões                                                              */
+/* ------------------------------------------------------------------ */
+.rh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  border-radius: 4px;
+  transition:
+    filter 0.15s var(--rh-ease),
+    background-color 0.15s var(--rh-ease),
+    box-shadow 0.15s var(--rh-ease),
+    transform 0.15s var(--rh-ease);
 }
 
-.steam-btn-blue {
+.rh-btn:active:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.steam-btn-green,
+.rh-btn-play {
+  background: linear-gradient(90deg, #5c7e10 0%, #75b022 100%);
+  box-shadow: 0 2px 10px -2px rgba(117, 176, 34, 0.45);
+}
+.steam-btn-green:hover:not(:disabled),
+.rh-btn-play:hover:not(:disabled) {
+  background: linear-gradient(90deg, #6b9214 0%, #8bcc2a 100%);
+}
+
+.steam-btn-blue,
+.rh-btn-install {
   background: linear-gradient(90deg, #06bfff 0%, #2d73ff 100%);
+  box-shadow: 0 2px 10px -2px rgba(45, 115, 255, 0.45);
 }
-.steam-btn-blue:hover:not(:disabled) {
+.steam-btn-blue:hover:not(:disabled),
+.rh-btn-install:hover:not(:disabled) {
   background: linear-gradient(90deg, #2ccaff 0%, #4684ff 100%);
 }
 
+.rh-btn-ghost {
+  background: rgba(255, 255, 255, 0.07);
+  color: #dcdedf;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.rh-btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.rh-btn-warn {
+  background: #b87d14;
+}
+.rh-btn-warn:hover:not(:disabled) {
+  background: #cf8e19;
+}
+
+/* ------------------------------------------------------------------ */
+/* Chips / pílulas de filtro                                           */
+/* ------------------------------------------------------------------ */
+.rh-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rh-muted);
+  background: #1f2a38;
+  box-shadow: inset 0 0 0 1px #2c3b4e;
+  transition:
+    background-color 0.15s var(--rh-ease),
+    color 0.15s var(--rh-ease),
+    box-shadow 0.15s var(--rh-ease);
+}
+.rh-chip:hover {
+  color: #fff;
+  background: #28384b;
+}
+.rh-chip[aria-pressed='true'],
+.rh-chip-active {
+  color: #fff;
+  background: var(--rh-accent);
+  box-shadow: 0 2px 10px -3px rgba(26, 159, 255, 0.6);
+}
+.rh-chip-count {
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+/* ------------------------------------------------------------------ */
+/* Cápsula (card de jogo)                                              */
+/* ------------------------------------------------------------------ */
+.rh-capsule {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--rh-surface);
+  border: 1px solid var(--rh-line);
+  border-radius: 6px;
+  overflow: hidden;
+  transition:
+    transform 0.18s var(--rh-ease),
+    border-color 0.18s var(--rh-ease),
+    box-shadow 0.18s var(--rh-ease);
+  /* Cards fora da tela não são pintados: a grade de 300+ jogos continua fluida */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 292px;
+}
+.rh-capsule:hover,
+.rh-capsule:focus-within {
+  transform: translateY(-3px);
+  border-color: var(--rh-line-strong);
+  box-shadow:
+    0 14px 28px -10px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(102, 192, 244, 0.12);
+}
+
+.rh-capsule-art {
+  position: relative;
+  height: 9rem;
+  overflow: hidden;
+  background: #0e141b;
+}
+
+.rh-capsule-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(10, 14, 20, 0) 40%, rgba(10, 14, 20, 0.72) 100%);
+  opacity: 0;
+  transition: opacity 0.18s var(--rh-ease);
+  pointer-events: none;
+}
+.rh-capsule:hover .rh-capsule-play,
+.rh-capsule:focus-within .rh-capsule-play {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Destaque (hero)                                                     */
+/* ------------------------------------------------------------------ */
+.rh-hero-backdrop {
+  position: absolute;
+  inset: -24px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(28px) saturate(1.2);
+  opacity: 0.45;
+  transform: scale(1.1);
+}
+
+.rh-hero-fade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(23, 26, 33, 0.96) 0%, rgba(23, 26, 33, 0.72) 48%, rgba(23, 26, 33, 0.35) 100%),
+    linear-gradient(180deg, rgba(23, 26, 33, 0) 55%, #1b2838 100%);
+}
+
+/* ------------------------------------------------------------------ */
+/* Esqueleto de carregamento                                           */
+/* ------------------------------------------------------------------ */
+@keyframes rh-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.rh-skeleton {
+  background: linear-gradient(90deg, #172230 25%, #1f2e40 50%, #172230 75%);
+  background-size: 200% 100%;
+  animation: rh-shimmer 1.6s linear infinite;
+}
+
+/* ------------------------------------------------------------------ */
+/* Fundos                                                              */
+/* ------------------------------------------------------------------ */
 .steam-main-gradient {
   background: linear-gradient(180deg, #1b2838 0%, #171a21 100%);
+}
+
+/* Barra de progresso fina no rodapé (downloads em andamento) */
+.rh-progress-line {
+  position: absolute;
+  top: -1px;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #06bfff, #2d73ff);
+  box-shadow: 0 0 8px rgba(26, 159, 255, 0.8);
+  transition: width 0.3s var(--rh-ease);
+}
+
+/* ------------------------------------------------------------------ */
+/* Acessibilidade: respeitar "reduzir movimento"                       */
+/* ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .rh-capsule:hover,
+  .rh-capsule:focus-within {
+    transform: none;
+  }
 }

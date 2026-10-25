@@ -22,6 +22,7 @@
   "include": [
     "src/renderer/**/*",
     "src/preload/*.d.ts",
+    "src/main/data/community-ports.json",
     "src/shared/**/*"
   ]
 }

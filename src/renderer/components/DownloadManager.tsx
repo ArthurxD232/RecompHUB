@@ -80,7 +80,7 @@ export const DownloadManager: React.FC<DownloadManagerProps> = ({
       {/* Task Queue List */}
       <div className="p-6 max-w-5xl mx-auto space-y-3">
         {sortedTasks.length === 0 ? (
-          <div className="p-10 bg-[#16202d] border border-[#263649] rounded-[3px] text-center space-y-2">
+          <div className="p-10 bg-[#16202d] border border-[#263649] rounded-lg text-center space-y-2">
             <Download className="w-6 h-6 text-[#67707b] mx-auto" />
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#c7d5e0]">
               NENHUMA TAREFA DE DOWNLOAD REGISTRADA
@@ -98,11 +98,11 @@ export const DownloadManager: React.FC<DownloadManagerProps> = ({
             return (
               <div
                 key={task.taskId}
-                className="p-4 rounded-[3px] bg-[#16202d] border border-[#263649] space-y-3"
+                className="p-4 rounded-lg bg-[#16202d] border border-[#263649] space-y-3"
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="w-14 h-10 rounded-[2px] bg-[#0e141b] border border-[#28384a] overflow-hidden shrink-0 flex items-center justify-center">
+                    <div className="w-14 h-10 rounded-md bg-[#0e141b] border border-[#28384a] overflow-hidden shrink-0 flex items-center justify-center">
                       {task.imageUrl ? (
                         <img
                           src={task.imageUrl}
@@ -120,7 +120,7 @@ export const DownloadManager: React.FC<DownloadManagerProps> = ({
                         <h4 className="text-sm font-bold text-white truncate">
                           {task.gameTitle}
                         </h4>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-[2px] bg-[#233242] text-[#67c1f5]">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[#233242] text-[#67c1f5]">
                           {task.projectName}
                         </span>
                       </div>
@@ -134,7 +134,7 @@ export const DownloadManager: React.FC<DownloadManagerProps> = ({
                     {task.stage === 'READY_TO_PLAY' ? (
                       <button
                         onClick={() => onLaunchGame(task.gameId)}
-                        className="steam-btn-green px-5 py-1.5 rounded-[2px] text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
+                        className="steam-btn-green px-5 py-1.5 rounded-md text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5"
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
                         <span>JOGAR</span>
@@ -171,7 +171,7 @@ export const DownloadManager: React.FC<DownloadManagerProps> = ({
 
                 {/* Recipe Log Output */}
                 {task.logs.length > 0 && (
-                  <div className="p-2.5 rounded-[2px] bg-[#0e141b] border border-[#223040] font-mono text-[11px] text-[#8f98a0] max-h-32 overflow-y-auto space-y-0.5">
+                  <div className="p-2.5 rounded-md bg-[#0e141b] border border-[#223040] font-mono text-[11px] text-[#8f98a0] max-h-32 overflow-y-auto space-y-0.5">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-1.5 mb-1">
                       <Terminal className="w-3 h-3" />
                       <span>SAÍDA DA INSTALAÇÃO</span>
