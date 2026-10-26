@@ -1,0 +1,8 @@
+feat: integracao com Steam (1-clique), sincronizacao de execucao, modo de tela cheia e patches no topo
+
+- Integracao completa com a Steam: adicionar/remover jogos da Steam em 1 clique via shortcuts.vdf binario, com geracao e copia automatica de capas da grade (vertical e horizontal) e icones em alta resolucao no userdata da Steam (Linux e Windows).
+- Sanitizacao de runtime da Steam: geracao automatica de LaunchOptions ('env -u LD_LIBRARY_PATH -u LD_PRELOAD %command%') no Linux para evitar conflitos de bibliotecas do runtime legado da Steam com drivers graficos Mesa/Vulkan/Wayland modernos (PySide6/Qt6), alem de correcao de aspas literais no StartDir.
+- Sincronizacao de status de execucao em tempo real: RunnerService monitora os processos ativos (via /proc em passe unico no Linux e tasklist no Windows), detectando instantaneamente quando um jogo e aberto pela Steam ou externamente, exibindo "EM EXECUCAO" na biblioteca e contabilizando o tempo jogado ao fechar.
+- Modo de tela cheia configuravel: alternancia entre Tela Cheia (Borderless) e Modo Janela direto no modal do jogo, com sincronizacao automatica em settings.json, user/tlg.ini e %APPDATA%.
+- Destaque visual de Patches e DLC: secao de atualizacoes reposicionada no topo do modal para acesso rapido, com suporte a patches .pkg, zips com PKG e pastas de DLC.
+- Gerenciador de downloads: botao para cancelar downloads em andamento e acao para limpar historico de downloads concluidos.

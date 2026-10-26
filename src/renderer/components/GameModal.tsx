@@ -21,6 +21,7 @@ import {
   Cpu,
   Sparkles,
   AlertCircle,
+  XCircle,
   Package,
   FilePlus2,
   FolderPlus,
@@ -35,8 +36,19 @@ import {
   ResolvedReleaseInfo,
   RomAvailabilityStatus,
   RomRequirement,
+  RomVaultEntry,
   UninstallGameOptions
 } from '../../shared/types'
+
+/** `file` está dentro de `folder`? (compara sem diferenciar \ de /, e sem maiúsculas no Windows) */
+function isInsideFolder(file: string, folder: string): boolean {
+  if (!folder) return false
+  const norm = (p: string): string => {
+    const s = p.replace(/\\/g, '/').replace(/\/+$/, '')
+    return /^[a-z]:/i.test(s) ? s.toLowerCase() : s
+  }
+  return norm(file).startsWith(norm(folder) + '/')
+}
 
 interface GameModalProps {
   game: CatalogGame
@@ -53,9 +65,10 @@ interface GameModalProps {
   ) => void
   onLaunch: (gameId: string) => void
   onStop: (gameId: string) => void
-  onReapplyRecipe: (gameId: string) => Promise<void>
+  onReapplyRecipe: (gameId: string) => Promise<InstalledGame | void>
   onUninstall: (gameId: string, options?: UninstallGameOptions) => Promise<void>
   onRomImported: () => void
+  onCancelDownload?: (taskId: string) => void
   onOpenDownloads?: () => void
 }
 
@@ -90,6 +103,7 @@ export const GameModal: React.FC<GameModalProps> = ({
   onReapplyRecipe,
   onUninstall,
   onRomImported,
+  onCancelDownload,
   onOpenDownloads
 }) => {
   const ports = game.ports && game.ports.length > 0 ? game.ports : []
@@ -155,9 +169,67 @@ export const GameModal: React.FC<GameModalProps> = ({
   const [actionBusy, setActionBusy] = useState(false)
   const [busyMessage, setBusyMessage] = useState<string | null>(null)
   const [launchError, setLaunchError] = useState<string | null>(null)
+  const [reapplyResult, setReapplyResult] = useState<{ ok: boolean; lines: string[] } | null>(null)
 
   const [showUninstallModal, setShowUninstallModal] = useState(false)
   const [deleteIsoToo, setDeleteIsoToo] = useState(true)
+  // Lixeira do cartão da ISO/ROM: sempre remove o caminho; apagar o arquivo do computador é opcional
+  const [romRemoval, setRomRemoval] = useState<{
+    entry: RomVaultEntry
+    label: string
+    canDeleteFile: boolean
+  } | null>(null)
+  const [deleteRomFile, setDeleteRomFile] = useState(false)
+
+  const [isAddedToSteam, setIsAddedToSteam] = useState(false)
+  const [steamBusy, setSteamBusy] = useState(false)
+  const [steamMessage, setSteamMessage] = useState<{ text: string; ok: boolean } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    if (activeInstalled && window.api.isGameInSteam) {
+      window.api.isGameInSteam(activeGame.id).then((added) => {
+        if (!cancelled) setIsAddedToSteam(added)
+      }).catch(() => {
+        if (!cancelled) setIsAddedToSteam(false)
+      })
+    } else {
+      setIsAddedToSteam(false)
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [activeGame.id, activeInstalled])
+
+  const handleAddToSteam = async (): Promise<void> => {
+    if (!activeInstalled || steamBusy) return
+    setSteamBusy(true)
+    setSteamMessage(null)
+    try {
+      const res = await window.api.addGameToSteam(activeGame.id)
+      setIsAddedToSteam(true)
+      setSteamMessage({ text: res.message || 'Jogo adicionado à Steam!', ok: true })
+    } catch (err: any) {
+      setSteamMessage({ text: err?.message || 'Erro ao adicionar à Steam.', ok: false })
+    } finally {
+      setSteamBusy(false)
+    }
+  }
+
+  const handleRemoveFromSteam = async (): Promise<void> => {
+    if (!activeInstalled || steamBusy) return
+    setSteamBusy(true)
+    setSteamMessage(null)
+    try {
+      await window.api.removeGameFromSteam(activeGame.id)
+      setIsAddedToSteam(false)
+      setSteamMessage({ text: 'Jogo removido da biblioteca da Steam.', ok: true })
+    } catch (err: any) {
+      setSteamMessage({ text: err?.message || 'Erro ao remover da Steam.', ok: false })
+    } finally {
+      setSteamBusy(false)
+    }
+  }
 
   const refreshRomStatus = async (): Promise<void> => {
     try {
@@ -189,6 +261,7 @@ export const GameModal: React.FC<GameModalProps> = ({
 
   useEffect(() => {
     loadDetails(activeGame.id)
+    setReapplyResult(null)
   }, [activeGame.id])
 
   useEffect(() => {
@@ -242,6 +315,31 @@ export const GameModal: React.FC<GameModalProps> = ({
     }
   }
 
+  /** Reaplica a receita e mostra o que aconteceu (antes o botão não dava nenhuma resposta). */
+  const handleReapply = async (): Promise<void> => {
+    setActionBusy(true)
+    setLaunchError(null)
+    setReapplyResult(null)
+    try {
+      const updated = await onReapplyRecipe(activeGame.id)
+      setRomStatus(await window.api.checkRomAvailability(activeGame.id))
+      const interesting = (updated?.recipeLogs ?? [])
+        .map((line) => line.replace(/^\[[^\]]*\]\s*/, ''))
+        .filter((line) =>
+          /pendente|problema|aviso|vinculad|atalho|patch|raiz do jogo|executável principal|erro/i.test(line)
+        )
+      const ok = updated ? updated.status !== 'NEEDS_ROM' : true
+      setReapplyResult({
+        ok,
+        lines: interesting.length > 0 ? interesting : ['Receita reaplicada, sem alterações.']
+      })
+    } catch (err: any) {
+      setLaunchError(err?.message || String(err))
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
   const handleRemovePatch = async (filePath: string): Promise<void> => {
     setActionBusy(true)
     try {
@@ -255,12 +353,37 @@ export const GameModal: React.FC<GameModalProps> = ({
     }
   }
 
-  const handleRemoveRomFromPc = async (filePath: string): Promise<void> => {
+  const askRemoveRom = async (entry: RomVaultEntry, label: string): Promise<void> => {
+    // Uma pasta que o usuário apontou (o dump dele) nunca é apagada: só o caminho é removido
+    let canDeleteFile = true
+    if (entry.isDirectory) {
+      try {
+        const { romVaultPath } = await window.api.getSettings()
+        canDeleteFile = isInsideFolder(entry.filePath, romVaultPath)
+      } catch {
+        canDeleteFile = false
+      }
+    }
+    setDeleteRomFile(false)
+    setRomRemoval({ entry, label, canDeleteFile })
+  }
+
+  const handleConfirmRemoveRom = async (): Promise<void> => {
+    if (!romRemoval) return
     setActionBusy(true)
     try {
-      await window.api.removeRomVaultEntry(filePath, true)
+      await window.api.removeRomVaultEntry(
+        romRemoval.entry.filePath,
+        romRemoval.canDeleteFile && deleteRomFile
+      )
+      // Jogo já instalado: tira os atalhos que apontavam para essa ISO/ROM (volta a "aguardando ISO/ROM")
+      if (activeInstalled) await onReapplyRecipe(activeGame.id)
       await refreshRomStatus()
       onRomImported()
+      setRomRemoval(null)
+    } catch (err: any) {
+      setRomRemoval(null)
+      setLaunchError(err?.message || String(err))
     } finally {
       setActionBusy(false)
     }
@@ -536,21 +659,41 @@ export const GameModal: React.FC<GameModalProps> = ({
                 </span>
               </button>
             )
+          ) : isDownloading && activeDownloadTask ? (
+            <div className="flex items-center gap-2">
+              <button
+                disabled
+                className="steam-btn-blue px-7 py-2.5 rounded-md text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow-md opacity-80 cursor-wait"
+              >
+                <Download className="w-4 h-4 animate-bounce" />
+                <span>
+                  {activeDownloadTask?.stage === 'EXTRACTING_ISO' ? 'DESCOMPACTANDO ISO' : 'INSTALANDO'} ({activeDownloadTask?.overallProgress ?? 0}%)
+                </span>
+              </button>
+              {onCancelDownload && (
+                <button
+                  onClick={() => onCancelDownload(activeDownloadTask.taskId)}
+                  className="px-4 py-2.5 bg-[#2b1717] hover:bg-[#451f1f] border border-[#6b2c2c] hover:border-red-500 rounded-md text-red-300 hover:text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors shadow"
+                  title="Cancelar download e instalação deste jogo"
+                >
+                  <XCircle className="w-4 h-4" />
+                  <span>Cancelar</span>
+                </button>
+              )}
+            </div>
           ) : (
             <button
               onClick={handleInstallClick}
-              disabled={actionBusy || isDownloading || Boolean(releaseError)}
+              disabled={actionBusy || Boolean(releaseError)}
               className="steam-btn-blue px-8 py-2.5 rounded-md text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow-md disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
               <span>
-                {isDownloading
-                  ? `${activeDownloadTask?.stage === 'EXTRACTING_ISO' ? 'DESCOMPACTANDO ISO' : 'INSTALANDO'} (${activeDownloadTask?.overallProgress ?? 0}%)`
-                  : releaseError
-                    ? 'RELEASE INDISPONÍVEL NO GITHUB'
-                    : romStatus?.ready
-                      ? 'INSTALAR'
-                      : 'ESCOLHER ISO E INSTALAR'}
+                {releaseError
+                  ? 'RELEASE INDISPONÍVEL NO GITHUB'
+                  : romStatus?.ready
+                    ? 'INSTALAR'
+                    : 'ESCOLHER ISO E INSTALAR'}
               </span>
             </button>
           )}
@@ -644,6 +787,26 @@ export const GameModal: React.FC<GameModalProps> = ({
           {activeInstalled && (
             <>
               <button
+                onClick={handleAddToSteam}
+                disabled={steamBusy}
+                title={
+                  isAddedToSteam
+                    ? 'Este jogo já está adicionado na Steam (clique para sincronizar/atualizar atalho e artes)'
+                    : 'Adicionar este jogo como atalho na sua biblioteca da Steam (com capa e ícone)'
+                }
+                className={`px-3 py-2 rounded-md border text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm ${
+                  isAddedToSteam
+                    ? 'bg-[#1b2838] hover:bg-[#2a475e] border-[#66c0f4] text-[#66c0f4]'
+                    : 'bg-[#2a3846] hover:bg-[#36495c] border-[#3a4d63] text-[#dcdedf]'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24">
+                  <path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.005.105.005.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 12-5.373 12-12s-5.373-12-12-12z" />
+                </svg>
+                <span>{steamBusy ? 'Sincronizando...' : isAddedToSteam ? 'Na Steam' : 'Adicionar à Steam'}</span>
+              </button>
+
+              <button
                 onClick={() => window.api.openGameFolder(activeGame.id)}
                 title="Explorar arquivos locais instalados"
                 className="p-2 rounded-md bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#c7d5e0]"
@@ -652,18 +815,7 @@ export const GameModal: React.FC<GameModalProps> = ({
               </button>
 
               <button
-                onClick={async () => {
-                  setActionBusy(true)
-                  try {
-                    await onReapplyRecipe(activeGame.id)
-                    const updatedRom = await window.api.checkRomAvailability(
-                      activeGame.id
-                    )
-                    setRomStatus(updatedRom)
-                  } finally {
-                    setActionBusy(false)
-                  }
-                }}
+                onClick={handleReapply}
                 disabled={actionBusy}
                 title="Reaplicar receita pós-instalação"
                 className="p-2 rounded-md bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#c7d5e0]"
@@ -729,10 +881,84 @@ export const GameModal: React.FC<GameModalProps> = ({
 
       {/* Alerts */}
       <div className="px-6 pt-4 space-y-3">
+        {steamMessage && (
+          <div
+            className={`p-3 rounded-md border text-xs flex items-center justify-between gap-3 ${
+              steamMessage.ok
+                ? 'bg-[#162738] border-[#316896] text-[#dcdedf]'
+                : 'bg-[#4c1d1d] border-[#8c3232] text-red-100'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              {steamMessage.ok ? (
+                <CheckCircle2 className="w-4 h-4 text-[#66c0f4] shrink-0" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-red-300 shrink-0" />
+              )}
+              <span className="break-words">{steamMessage.text}</span>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              {isAddedToSteam && steamMessage.ok && (
+                <button
+                  type="button"
+                  onClick={handleRemoveFromSteam}
+                  disabled={steamBusy}
+                  className="text-[11px] font-semibold text-[#8f98a0] hover:text-red-300 underline"
+                >
+                  Remover da Steam
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setSteamMessage(null)}
+                aria-label="Fechar aviso"
+                className="text-current opacity-70 hover:opacity-100 text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         {(launchError || activeLastTask?.stage === 'ERROR') && (
           <div className="p-3 rounded-md bg-[#4c1d1d] border border-[#8c3232] text-xs text-red-100 flex items-center gap-2.5">
             <AlertTriangle className="w-4 h-4 text-red-300 shrink-0" />
             <span>{launchError || activeLastTask?.error}</span>
+          </div>
+        )}
+
+        {reapplyResult && (
+          <div
+            role="status"
+            className={`p-3 rounded-md border text-xs flex items-start gap-2.5 ${
+              reapplyResult.ok
+                ? 'bg-[#16301f] border-[#2f6b42] text-[#d3f0dc]'
+                : 'bg-[#33250f] border-[#7a5a1c] text-[#f4dfb4]'
+            }`}
+          >
+            {reapplyResult.ok ? (
+              <CheckCircle2 className="w-4 h-4 text-[#6cc034] shrink-0 mt-0.5" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-[#e5a93c] shrink-0 mt-0.5" />
+            )}
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <div className="font-bold">
+                {reapplyResult.ok ? 'Receita reaplicada' : 'Receita reaplicada, mas ainda falta algo'}
+              </div>
+              {reapplyResult.lines.map((line, i) => (
+                <div key={i} className="break-words">
+                  {line}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setReapplyResult(null)}
+              aria-label="Fechar aviso"
+              className="text-current opacity-70 hover:opacity-100"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 
@@ -748,70 +974,6 @@ export const GameModal: React.FC<GameModalProps> = ({
       <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
         {/* Left 2 Columns: Port Details, ISO/ROM Configuration & Recipe Logs */}
         <div className="lg:col-span-2 space-y-5">
-          {/* Detailed Port Explanation & Differences Card */}
-          <div className="bg-[#161f29] border border-[#263545] rounded-lg p-4 space-y-3.5 shadow-sm">
-            <div className="flex items-center justify-between border-b border-[#253342] pb-2.5">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-2">
-                <Cpu className="w-4 h-4" />
-                SOBRE ESTE PORT: {activeGame.projectName}
-              </h2>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#111720] border border-[#243447] text-[#8fa7c0]">
-                {activeGame.toolchainType}
-              </span>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#67707b] block mb-0.5">
-                  O QUE É
-                </span>
-                <p className="text-[#c7d5e0] leading-relaxed">
-                  {activeGame.description}
-                </p>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#67707b] block mb-0.5">
-                  COMO É FEITO (ARQUITETURA &amp; MÉTODO)
-                </span>
-                <p className="text-[#96a0aa] leading-relaxed">
-                  {activeGame.howItWorks}
-                </p>
-              </div>
-
-              {activeGame.differences && (
-                <div className="p-3 rounded-md bg-[#121c27] border border-[#1e3248] space-y-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-[#1a9fff]" />
-                    DIFERENÇAS &amp; PONTOS FORTES DESTE PORT
-                  </span>
-                  <p className="text-[#c7d5e0] leading-relaxed">
-                    {activeGame.differences}
-                  </p>
-                </div>
-              )}
-
-              {activeGame.highlights && activeGame.highlights.length > 0 && (
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#67707b] block mb-1.5">
-                    DESTAQUES &amp; RECURSOS PRINCIPAIS
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {activeGame.highlights.map((hl, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2 text-[#dcdedf] bg-[#111720] px-3 py-2 rounded-md border border-[#202c3b]"
-                      >
-                        <span className="text-[#1a9fff] font-bold">✓</span>
-                        <span className="text-[11.5px] leading-tight">{hl}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* ISO / ROM Path Configuration Box */}
           <div className="bg-[#161f29] border border-[#263545] rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-[#253342] pb-2.5">
@@ -827,9 +989,25 @@ export const GameModal: React.FC<GameModalProps> = ({
             {hasFolderRequirement && (
               <div className="p-3 rounded-md bg-[#121c27] border border-[#1e3248] text-[11.5px] text-[#b8c4d0] leading-relaxed">
                 <strong className="text-[#66c0f4]">Jogos grandes (ex.: PS4, 25 GB ou mais):</strong> escolha a{' '}
-                <strong>pasta</strong> do dump. Ela fica registrada onde já está, sem copiar nada, e a pasta de
-                instalação recebe um atalho. Arquivos compactados (.zip, .7z, .rar) também funcionam, mas são
-                extraídos para o Cofre e precisam de espaço livre equivalente.
+                <strong>pasta do jogo já extraída</strong> (a que tem o <span className="font-mono">eboot.bin</span>{' '}
+                dentro). Ela fica registrada onde já está, sem copiar nada, e a pasta de instalação recebe um
+                atalho. Se você só tem os arquivos <span className="font-mono">.pkg</span>, escolha a pasta onde
+                eles estão: o RecompHUB extrai o jogo, os patches e os DLC sozinho (precisa do arquivo de chaves em
+                Configurações e de espaço livre para o jogo extraído). Arquivos compactados (.zip, .7z, .rar)
+                também funcionam, mas são extraídos para o Cofre antes.
+                {recipe?.helpUrl && (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      onClick={() => window.api.openExternalUrl(recipe.helpUrl!)}
+                      className="text-[#66c0f4] underline hover:text-white"
+                    >
+                      Ver o passo a passo do port
+                    </button>
+                    .
+                  </>
+                )}
               </div>
             )}
 
@@ -895,6 +1073,11 @@ export const GameModal: React.FC<GameModalProps> = ({
                             </div>
                           )}
                         </div>
+                      ) : match?.problem ? (
+                        <div className="text-[11px] text-[#ffb4a8] leading-relaxed flex items-start gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          <span>{match.problem}</span>
+                        </div>
                       ) : (
                         <div className="text-[11px] text-[#e5a93c]">
                           {req.type === 'folder'
@@ -928,11 +1111,10 @@ export const GameModal: React.FC<GameModalProps> = ({
 
                       {isReady && match?.localEntry && (
                         <button
-                          onClick={() =>
-                            handleRemoveRomFromPc(match.localEntry!.filePath)
-                          }
+                          onClick={() => askRemoveRom(match.localEntry!, req.label)}
                           disabled={actionBusy}
-                          title="Excluir este arquivo de ISO/ROM do computador"
+                          aria-label="Remover esta ISO/ROM do jogo"
+                          title="Remover esta ISO/ROM do jogo"
                           className="p-2 rounded-md bg-[#362020] hover:bg-[#7a2828] border border-[#5e3232] text-red-200 hover:text-white"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -945,21 +1127,27 @@ export const GameModal: React.FC<GameModalProps> = ({
             </div>
           </div>
 
-          {/* Patches, atualizações e DLC (opcional) */}
+          {/* Patches, atualizações e DLC (destaque superior) */}
           <div className="bg-[#161f29] border border-[#263545] rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-[#253342] pb-2.5">
               <h2 className="text-xs font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-2">
-                <Package className="w-4 h-4" />
+                <Package className="w-4 h-4 text-[#1a9fff]" />
                 PATCHES, ATUALIZAÇÕES E DLC
               </h2>
-              <span className="text-[11px] text-[#8f98a0]">Opcional</span>
+              {patchEntries.length > 0 ? (
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#21432e] text-[#6cc034] border border-[#2f6343] flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  {patchEntries.length} {patchEntries.length === 1 ? 'patch ativo' : 'patches ativos'}
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-[#1c2733] text-[#8fa7c0] border border-[#263747]">
+                  Opcional
+                </span>
+              )}
             </div>
 
             <p className="text-xs text-[#96a0aa] leading-relaxed">
-              Tem uma atualização, patch ou DLC do jogo (por exemplo o update 1.09 do Bloodborne, pastas de DLC
-              ou patches da comunidade)? Adicione aqui. Os arquivos ficam onde estão e o RecompHUB cria atalhos
-              na subpasta <span className="font-mono text-[#dcdedf]">{patchMatch?.requirement.targetSubdir || 'patches'}/</span>{' '}
-              do jogo, sem copiar nada pesado.
+              Tem uma atualização, patch ou DLC do jogo (por exemplo atualização .pkg do PS4, update 1.09 do Bloodborne, pastas de DLC ou patches da comunidade)? Adicione aqui. Os arquivos ficam onde estão e o RecompHUB cria atalhos na subpasta <span className="font-mono text-[#dcdedf]">{patchMatch?.requirement.targetSubdir || 'patches'}/</span> do jogo, sem copiar nada pesado.
               {activeInstalled
                 ? ' Os novos itens são vinculados na hora.'
                 : ' Serão vinculados quando o jogo for instalado.'}
@@ -1000,7 +1188,7 @@ export const GameModal: React.FC<GameModalProps> = ({
                 ))}
               </div>
             ) : (
-              <div className="text-[11px] text-[#67707b] px-1">Nenhum patch adicionado.</div>
+              <div className="text-[11px] text-[#67707b] px-1">Nenhum patch ou atualização adicionado ainda.</div>
             )}
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1008,29 +1196,93 @@ export const GameModal: React.FC<GameModalProps> = ({
                 type="button"
                 onClick={() => handleAddPatches('files')}
                 disabled={actionBusy}
-                className="rh-btn rh-btn-ghost px-3.5 min-h-[32px] text-[11px]"
+                className="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-[#2a3846] hover:bg-[#384b5e] border border-[#3e5268] text-white flex items-center gap-1.5 transition-all shadow-sm"
               >
-                <FilePlus2 className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Adicionar arquivos</span>
+                <FilePlus2 className="w-3.5 h-3.5 text-[#67c1f5]" aria-hidden="true" />
+                <span>Adicionar arquivos (.pkg / .zip)</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleAddPatches('folder')}
                 disabled={actionBusy}
-                className="rh-btn rh-btn-ghost px-3.5 min-h-[32px] text-[11px]"
+                className="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-[#212d3b] hover:bg-[#2c3c4f] border border-[#2f4258] text-[#c7d5e0] flex items-center gap-1.5 transition-all"
               >
-                <FolderPlus className="w-3.5 h-3.5" aria-hidden="true" />
+                <FolderPlus className="w-3.5 h-3.5 text-[#67c1f5]" aria-hidden="true" />
                 <span>Adicionar pasta (DLC)</span>
               </button>
               {activeInstalled && patchEntries.length > 0 && (
                 <button
                   type="button"
                   onClick={() => window.api.openGameFolder(activeGame.id)}
-                  className="rh-btn rh-btn-ghost px-3.5 min-h-[32px] text-[11px]"
+                  className="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-[#212d3b] hover:bg-[#2c3c4f] border border-[#2f4258] text-[#c7d5e0] flex items-center gap-1.5 transition-all"
                 >
-                  <FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />
+                  <FolderOpen className="w-3.5 h-3.5 text-[#67c1f5]" aria-hidden="true" />
                   <span>Abrir pasta do jogo</span>
                 </button>
+              )}
+            </div>
+          </div>
+
+          {/* Detailed Port Explanation & Differences Card */}
+          <div className="bg-[#161f29] border border-[#263545] rounded-lg p-4 space-y-3.5 shadow-sm">
+            <div className="flex items-center justify-between border-b border-[#253342] pb-2.5">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-2">
+                <Cpu className="w-4 h-4" />
+                SOBRE ESTE PORT: {activeGame.projectName}
+              </h2>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#111720] border border-[#243447] text-[#8fa7c0]">
+                {activeGame.toolchainType}
+              </span>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#67707b] block mb-0.5">
+                  O QUE É
+                </span>
+                <p className="text-[#c7d5e0] leading-relaxed">
+                  {activeGame.description}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#67707b] block mb-0.5">
+                  COMO É FEITO (ARQUITETURA &amp; MÉTODO)
+                </span>
+                <p className="text-[#96a0aa] leading-relaxed">
+                  {activeGame.howItWorks}
+                </p>
+              </div>
+
+              {activeGame.differences && (
+                <div className="p-3 rounded-md bg-[#121c27] border border-[#1e3248] space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#67c1f5] flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#1a9fff]" />
+                    DIFERENÇAS &amp; PONTOS FORTES DESTE PORT
+                  </span>
+                  <p className="text-[#c7d5e0] leading-relaxed">
+                    {activeGame.differences}
+                  </p>
+                </div>
+              )}
+
+              {activeGame.highlights && activeGame.highlights.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#67707b] block mb-1.5">
+                    DESTAQUES &amp; RECURSOS PRINCIPAIS
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {activeGame.highlights.map((hl, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 text-[#dcdedf] bg-[#111720] px-3 py-2 rounded-md border border-[#202c3b]"
+                      >
+                        <span className="text-[#1a9fff] font-bold">✓</span>
+                        <span className="text-[11.5px] leading-tight">{hl}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -1226,6 +1478,103 @@ export const GameModal: React.FC<GameModalProps> = ({
                   className="px-5 py-2 rounded-md bg-[#b83232] hover:bg-[#d43b3b] text-xs font-bold uppercase tracking-wider text-white shadow"
                 >
                   {actionBusy ? 'Excluindo...' : 'Confirmar Exclusão'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Remover a ISO/ROM vinculada (o caminho sai sempre; apagar o arquivo é opcional) */}
+      {romRemoval && (
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rom-removal-title"
+            className="w-full max-w-md bg-[#1b2838] border border-[#354c66] rounded-lg shadow-2xl overflow-hidden"
+          >
+            <div className="px-5 py-3.5 bg-[#171d25] border-b border-[#2a3846] flex items-center justify-between">
+              <div
+                id="rom-removal-title"
+                className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white"
+              >
+                <Trash2 className="w-4 h-4 text-red-400" />
+                <span>REMOVER ISO / ROM — {activeGame.title}</span>
+              </div>
+              <button
+                onClick={() => setRomRemoval(null)}
+                disabled={actionBusy}
+                aria-label="Fechar"
+                className="text-[#8f98a0] hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs text-[#c7d5e0]">
+              <p className="leading-relaxed">
+                O caminho de <strong className="text-white">{romRemoval.label}</strong> será removido deste jogo
+                {activeInstalled
+                  ? ', inclusive o atalho na pasta de instalação (o jogo volta a pedir a ISO/ROM).'
+                  : '.'}
+              </p>
+
+              <div className="p-3 rounded-md bg-[#131c27] border border-[#2a3c52] space-y-1 min-w-0">
+                <div className="font-bold text-white truncate">{romRemoval.entry.fileName}</div>
+                <div className="text-[11px] text-[#6cc034]">{formatBytes(romRemoval.entry.size)}</div>
+                <div className="font-mono text-[10px] text-[#8f98a0] break-all">{romRemoval.entry.filePath}</div>
+              </div>
+
+              {romRemoval.canDeleteFile ? (
+                <label className="p-3.5 rounded-md bg-[#131c27] border border-[#2a3c52] flex items-start gap-3 cursor-pointer select-none hover:border-[#416082]">
+                  <input
+                    type="checkbox"
+                    checked={deleteRomFile}
+                    onChange={(e) => setDeleteRomFile(e.target.checked)}
+                    className="mt-0.5 accent-[#1a9fff]"
+                  />
+                  <div className="space-y-1 min-w-0">
+                    <div className="font-bold text-white flex items-center gap-1.5">
+                      <HardDrive className="w-3.5 h-3.5 text-[#67c1f5] shrink-0" />
+                      <span>Excluir também o arquivo do computador</span>
+                    </div>
+                    <p className="text-[11px] text-[#8f98a0] leading-relaxed">
+                      Apaga o arquivo de verdade e libera {formatBytes(romRemoval.entry.size)}. Sem marcar, o
+                      arquivo continua no computador e só sai da lista do RecompHUB (se ele estiver na pasta do
+                      Cofre, uma nova varredura em Configurações pode registrá-lo de novo).
+                    </p>
+                  </div>
+                </label>
+              ) : (
+                <p className="text-[11px] text-[#8f98a0] leading-relaxed">
+                  Esta pasta é sua e fica onde está no computador: o RecompHUB só remove o caminho e nunca apaga
+                  pastas que você escolheu.
+                </p>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#263649]">
+                <button
+                  onClick={() => setRomRemoval(null)}
+                  disabled={actionBusy}
+                  autoFocus
+                  className="px-4 py-2 rounded-md bg-[#2a3846] hover:bg-[#37495b] text-xs font-bold uppercase tracking-wider text-[#dcdedf]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmRemoveRom}
+                  disabled={actionBusy}
+                  className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider text-white shadow ${
+                    romRemoval.canDeleteFile && deleteRomFile
+                      ? 'bg-[#b83232] hover:bg-[#d43b3b]'
+                      : 'steam-btn-blue'
+                  }`}
+                >
+                  {actionBusy
+                    ? 'Removendo...'
+                    : romRemoval.canDeleteFile && deleteRomFile
+                      ? 'Remover e excluir arquivo'
+                      : 'Remover caminho'}
                 </button>
               </div>
             </div>

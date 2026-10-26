@@ -1,5 +1,6 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import * as os from 'os'
 import { spawn } from 'child_process'
 import {
   CatalogGame,
@@ -10,6 +11,8 @@ import {
 import { StoreService } from './store.service'
 import { RomVaultService } from './rom-vault.service'
 import { isInstallerAsset } from './asset-selector'
+import { findMarkerRoot } from './archive.service'
+import { parseSfo } from './pkg/pkg'
 
 export interface RecipeExecutionResult {
   executablePath: string
@@ -17,6 +20,7 @@ export interface RecipeExecutionResult {
   romPaired: boolean
   pairedRomPaths: string[]
   pairedPatchPaths: string[]
+  aliasLinkPaths: string[]
   portableMode: boolean
   status: 'READY_TO_PLAY' | 'NEEDS_ROM' | 'ERROR'
   logs: string[]
@@ -78,6 +82,8 @@ export class RecipeService {
 
     // 2. Pair required ROMs / ISOs / BIOS from local vault
     const pairedRomPaths: string[] = []
+    const aliasLinkPaths: string[] = []
+    const resolvedRoots = new Map<string, string>()
     let allRequiredPaired = true
 
     for (const item of availability.matchedRequirements) {
@@ -91,6 +97,22 @@ export class RecipeService {
         if (!req.optional) {
           allRequiredPaired = false
           log(`Requisito pendente: ${req.label} (esperado: ${req.expectedFilename})`)
+          if (item.problem) log(`Problema: ${item.problem}`)
+        }
+        // Atalhos criados antes para um item que não serve mais não podem ficar apontando para ele
+        if (req.type === 'folder') {
+          this.removeLinkIfAny(path.join(installDir, req.expectedFilename))
+          for (const alias of recipe.aliasLinks || []) {
+            if (alias.requirementId !== req.id) continue
+            const aliasPath = path.resolve(installDir, alias.path)
+            if (aliasPath.startsWith(path.resolve(settings.installRootPath) + path.sep)) {
+              this.removeLinkIfAny(aliasPath)
+            }
+          }
+        } else if (!req.keepOriginalName) {
+          // ISO/ROM removida do jogo: o atalho que ficou na pasta de instalação sai junto
+          // (só atalhos simbólicos; um arquivo de verdade colocado ali nunca é apagado)
+          this.removeLinkIfAny(path.join(installDir, req.expectedFilename))
         }
         continue
       }
@@ -102,10 +124,18 @@ export class RecipeService {
 
       // Pasta do jogo (dump de PS4 etc.): atalho para o local original, nunca uma cópia de dezenas de GB
       if (localEntry.isDirectory) {
-        const linked = this.linkDirectory(localEntry.filePath, destPath, log)
-        pairedRomPaths.push(linked ?? localEntry.filePath)
+        // A raiz do jogo (onde está o eboot.bin etc.) pode estar numa subpasta do item registrado
+        const gameRoot = req.markerFile
+          ? (findMarkerRoot(localEntry.filePath, req.markerFile, 2) ?? localEntry.filePath)
+          : localEntry.filePath
+        if (gameRoot !== localEntry.filePath) {
+          log(`A raiz do jogo está na subpasta: ${path.relative(localEntry.filePath, gameRoot)}`)
+        }
+        resolvedRoots.set(req.id, gameRoot)
+        const linked = this.linkDirectory(gameRoot, destPath, log)
+        pairedRomPaths.push(linked ?? gameRoot)
         if (linked) {
-          log(`Pasta do jogo vinculada: ${path.basename(destPath)} -> ${localEntry.filePath}`)
+          log(`Pasta do jogo vinculada: ${path.basename(destPath)} -> ${gameRoot}`)
         }
         continue
       }
@@ -176,6 +206,37 @@ export class RecipeService {
       }
     }
 
+    // 2a. Atalhos extras definidos pela receita (o port procura o jogo num lugar fixo)
+    for (const alias of recipe.aliasLinks || []) {
+      const item = availability.matchedRequirements.find((m) => m.requirement.id === alias.requirementId)
+      const entry = item?.localEntry
+      if (!entry || !fs.existsSync(entry.filePath)) continue
+      const aliasTarget = resolvedRoots.get(alias.requirementId) ?? entry.filePath
+
+      const aliasPath = path.resolve(installDir, alias.path)
+      const gamesRoot = path.resolve(settings.installRootPath)
+      // Segurança: receitas podem vir de fora; nada é criado fora da pasta de jogos do app
+      if (!aliasPath.startsWith(gamesRoot + path.sep)) {
+        log(`Aviso: atalho "${alias.path}" ignorado (fica fora da pasta de jogos do RecompHUB).`)
+        continue
+      }
+      if (entry.isDirectory) {
+        if (this.linkDirectory(aliasTarget, aliasPath, log)) {
+          aliasLinkPaths.push(aliasPath)
+          log(`Atalho para o port encontrar o jogo: ${path.relative(gamesRoot, aliasPath)} -> ${aliasTarget}`)
+        }
+      } else if (this.removeLinkIfAny(aliasPath)) {
+        try {
+          this.createFileLink(entry.filePath, aliasPath, settings.linkStrategy, 512 * 1024 * 1024)
+          aliasLinkPaths.push(aliasPath)
+        } catch (err: any) {
+          log(`Aviso: não foi possível criar o atalho ${alias.path}: ${err?.message}`)
+        }
+      } else {
+        log(`Aviso: já existe algo em "${alias.path}" que não é um atalho; nada foi alterado.`)
+      }
+    }
+
     // 2b. Patches, atualizações e DLC: vinculados à subpasta definida pela receita (padrão: patches/)
     const pairedPatchPaths: string[] = []
     for (const item of availability.matchedRequirements) {
@@ -207,6 +268,26 @@ export class RecipeService {
       await this.runXenonIsoExtraction(installDir, pairedRomPaths[0], settings.extractXisoPath, log)
     } else if (recipe.family === 'AssetExtractor' && pairedRomPaths.length > 0) {
       await this.runAssetExtractorIfNeeded(installDir, recipe, pairedRomPaths[0], log)
+    }
+
+    // 3b. PS4 / PS4 port post-processing (HayatoG launcher, ShadPS4, Bloodborne, etc.)
+    const isPs4Port =
+      recipe.console === 'PS4' ||
+      (recipe.family === 'GenericNative' &&
+        (fs.existsSync(path.join(installDir, 'port.env')) ||
+          pairedRomPaths.some((p) => {
+            try {
+              return fs.existsSync(p) && fs.existsSync(path.join(p, 'eboot.bin'))
+            } catch {
+              return false
+            }
+          }) ||
+          fs.existsSync(path.join(installDir, 'game_dump', 'eboot.bin')) ||
+          recipe.title.toLowerCase().includes('infamous') ||
+          recipe.title.toLowerCase().includes('bloodborne') ||
+          recipe.repoFullName.toLowerCase().includes('iss_pc')))
+    if (isPs4Port) {
+      this.configurePs4PortEnvironment(installDir, pairedRomPaths, recipe, game, log)
     }
 
     // 4. Discover main executable and set executable permissions on Linux
@@ -283,6 +364,7 @@ export class RecipeService {
       romPaired,
       pairedRomPaths,
       pairedPatchPaths,
+      aliasLinkPaths,
       portableMode,
       status,
       logs
@@ -903,6 +985,228 @@ export class RecipeService {
       )
     } catch {
       return false
+    }
+  }
+
+  private configurePs4PortEnvironment(
+    installDir: string,
+    pairedRomPaths: string[],
+    recipe: GameRecipe,
+    game: CatalogGame,
+    log: (m: string) => void
+  ): void {
+    try {
+      // 1. Locate game dump directory (contains eboot.bin)
+      let dumpDir: string | null = null
+      for (const p of pairedRomPaths) {
+        if (!fs.existsSync(p)) continue
+        try {
+          if (fs.statSync(p).isDirectory()) {
+            if (fs.existsSync(path.join(p, 'eboot.bin'))) {
+              dumpDir = p
+              break
+            }
+            const marker = findMarkerRoot(p, 'eboot.bin', 2)
+            if (marker) {
+              dumpDir = marker
+              break
+            }
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
+      if (!dumpDir && fs.existsSync(path.join(installDir, 'game_dump'))) {
+        const gd = path.join(installDir, 'game_dump')
+        if (fs.existsSync(path.join(gd, 'eboot.bin'))) {
+          dumpDir = gd
+        }
+      }
+
+      if (!dumpDir && pairedRomPaths.length > 0) {
+        dumpDir = pairedRomPaths[0]
+      }
+
+      if (!dumpDir || !fs.existsSync(dumpDir)) {
+        return
+      }
+
+      let realDumpDir = dumpDir
+      try {
+        realDumpDir = fs.realpathSync(dumpDir)
+      } catch {
+        realDumpDir = dumpDir
+      }
+
+      // 2. Read param.sfo if present
+      let titleId = ''
+      let appVer = ''
+      const sfoCandidates = [
+        path.join(realDumpDir, 'sce_sys', 'param.sfo'),
+        path.join(dumpDir, 'sce_sys', 'param.sfo')
+      ]
+      for (const sfoPath of sfoCandidates) {
+        if (fs.existsSync(sfoPath)) {
+          try {
+            const buf = fs.readFileSync(sfoPath)
+            const sfo = parseSfo(buf)
+            if (sfo.TITLE_ID) titleId = String(sfo.TITLE_ID).trim()
+            if (sfo.APP_VER) appVer = String(sfo.APP_VER).trim()
+            break
+          } catch {
+            // Ignore
+          }
+        }
+      }
+
+      // 3. Inspect port.env
+      let portSlug = ''
+      const portEnvCandidates = [
+        path.join(installDir, 'port.env'),
+        path.join(installDir, 'launcher', 'port.env')
+      ]
+      for (const pe of portEnvCandidates) {
+        if (fs.existsSync(pe)) {
+          try {
+            const lines = fs.readFileSync(pe, 'utf-8').split('\n')
+            for (const line of lines) {
+              const trimmed = line.trim()
+              if (!trimmed || trimmed.startsWith('#')) continue
+              const match = trimmed.match(/^([A-Z_]+)\s*=\s*["']?(.*?)["']?$/)
+              if (match) {
+                if (match[1] === 'PORT_SLUG') portSlug = match[2].trim()
+                if (match[1] === 'PORT_TITLE_ID' && !titleId) titleId = match[2].trim()
+              }
+            }
+            break
+          } catch {
+            // Ignore
+          }
+        }
+      }
+
+      // Fallback heuristics for slug
+      const combined = `${recipe.title} ${recipe.repoFullName}`.toLowerCase()
+      if (!portSlug) {
+        if (combined.includes('infamous') || combined.includes('iss_pc')) portSlug = 'infamous'
+        else if (combined.includes('last guardian') || combined.includes('tlg')) portSlug = 'tlg'
+        else if (combined.includes('god of war') || combined.includes('gow3')) portSlug = 'gow3'
+        else if (combined.includes('gravity')) portSlug = 'gravity'
+        else if (combined.includes('bloodborne')) portSlug = 'bloodborne'
+      }
+
+      // 4. Create directory aliases/symlinks (game_dump, TITLE_ID, ../TITLE_ID)
+      const gdLink = path.join(installDir, 'game_dump')
+      if (path.resolve(gdLink) !== path.resolve(dumpDir)) {
+        this.linkDirectory(dumpDir, gdLink, log)
+      }
+
+      if (titleId) {
+        const titleLinkInInstall = path.join(installDir, titleId)
+        if (path.resolve(titleLinkInInstall) !== path.resolve(dumpDir)) {
+          this.linkDirectory(dumpDir, titleLinkInInstall, log)
+        }
+        const titleLinkInParent = path.join(installDir, '..', titleId)
+        if (!fs.existsSync(titleLinkInParent)) {
+          try {
+            this.linkDirectory(dumpDir, titleLinkInParent, log)
+          } catch {
+            // Ignore if permission denied outside installRoot
+          }
+        }
+      }
+
+      // 5. Update launcher config files with game_dir
+      const slugs = new Set<string>()
+      if (portSlug) slugs.add(portSlug)
+      if (titleId === 'CUSA00223' || combined.includes('iss_pc') || combined.includes('infamous')) {
+        slugs.add('infamous')
+      }
+      if (titleId === 'CUSA03627' || combined.includes('tlg')) slugs.add('tlg')
+      if (titleId === 'CUSA01623' || combined.includes('gow3')) slugs.add('gow3')
+      if (titleId === 'CUSA01114' || combined.includes('gravity')) slugs.add('gravity')
+
+      const home = os.homedir()
+      const configPaths: string[] = []
+
+      for (const s of slugs) {
+        configPaths.push(path.join(home, '.config', `${s}-launcher`, 'settings.json'))
+        if (process.env.XDG_CONFIG_HOME) {
+          configPaths.push(path.join(process.env.XDG_CONFIG_HOME, `${s}-launcher`, 'settings.json'))
+        }
+        if (process.env.APPDATA) {
+          configPaths.push(path.join(process.env.APPDATA, `${s}-launcher`, 'settings.json'))
+        } else {
+          configPaths.push(path.join(home, 'AppData', 'Roaming', `${s}-launcher`, 'settings.json'))
+        }
+      }
+      // Portable configurations
+      configPaths.push(path.join(installDir, 'user', 'settings.json'))
+      configPaths.push(path.join(installDir, 'settings.json'))
+
+      const installed = typeof this.store.getInstalledGame === 'function' ? this.store.getInstalledGame(game.id) : undefined
+      const wantFullscreen = installed?.launchFullscreen !== false
+      const displayModeStr = wantFullscreen ? 'Borderless' : 'Windowed'
+      const iniDisplayMode = wantFullscreen ? 'borderless' : 'windowed'
+
+      for (const conf of new Set(configPaths)) {
+        try {
+          const dir = path.dirname(conf)
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+          let current: Record<string, any> = {}
+          if (fs.existsSync(conf)) {
+            try {
+              current = JSON.parse(fs.readFileSync(conf, 'utf-8'))
+            } catch {
+              current = {}
+            }
+          }
+          current.game_dir = realDumpDir
+          if (!current.game_language) current.game_language = 'pt_BR'
+          if (!current.ui_language) current.ui_language = 'pt_BR'
+          current.display_mode = displayModeStr
+          fs.writeFileSync(conf, JSON.stringify(current, null, 2), 'utf-8')
+          log(`Configuração automática do launcher PS4 aplicada (${path.basename(path.dirname(conf))}: game_dir e display_mode configurados).`)
+        } catch {
+          // Ignore
+        }
+      }
+
+      // Sync user/tlg.ini
+      const tlgIniPaths = [
+        path.join(installDir, 'user', 'tlg.ini'),
+        path.join(installDir, 'tlg.ini')
+      ]
+      for (const iniPath of new Set(tlgIniPaths)) {
+        try {
+          const dir = path.dirname(iniPath)
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+          let content = ''
+          if (fs.existsSync(iniPath)) {
+            content = fs.readFileSync(iniPath, 'utf-8')
+          }
+          if (/^display_mode\s*=/m.test(content)) {
+            content = content.replace(/^display_mode\s*=.*$/m, `display_mode=${iniDisplayMode}`)
+          } else {
+            content = content ? `${content.trim()}\ndisplay_mode=${iniDisplayMode}\n` : `# tlg settings\ndisplay_mode=${iniDisplayMode}\n`
+          }
+          fs.writeFileSync(iniPath, content, 'utf-8')
+        } catch {
+          // Ignore
+        }
+      }
+
+      // 6. Helpful version feedback for known requirements (e.g. inFAMOUS 1.07)
+      if (titleId === 'CUSA00223' || combined.includes('infamous') || combined.includes('iss_pc')) {
+        if (appVer && appVer < '01.07') {
+          log(`[AVISO inFAMOUS Second Son] O dump detectado está na versão ${appVer}. O port do inFAMOUS Second Son exige os arquivos do Update 1.07 (eboot.bin e sce_module/libc.prx da 1.07). O launcher foi pré-configurado com a pasta, mas para poder clicar em JOGAR é necessário o Update 1.07 montado sobre a base.`)
+        } else {
+          log(`[inFAMOUS Second Son] Pasta do jogo PS4 pré-configurada com sucesso (${titleId} v${appVer || '1.07'}).`)
+        }
+      }
+    } catch (err: any) {
+      log(`Aviso ao configurar ambiente PS4: ${err?.message}`)
     }
   }
 

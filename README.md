@@ -41,7 +41,13 @@ O RecompHUB faz tudo isso por você, com uma interface parecida com a da Steam.
 - **Configura tudo sozinho**: coloca a ROM com o nome que o jogo espera, ativa o modo portátil (saves ficam na pasta do jogo), roda extratores de assets quando necessário, etc.
 - **Jogos de Windows no Linux**: se o port só tem versão para Windows, o RecompHUB roda automaticamente com Proton / `umu-run`, sem precisar adicionar na Steam.
 - **Jogos gigantes (PS4, 25 GB ou mais)**: escolha a **pasta** do dump e ela fica registrada onde já está, sem copiar nada. Arquivos `.zip` de qualquer tamanho (inclusive acima de 2 GB) são extraídos em fluxo, com barra de progresso e checagem de espaço em disco.
+- **Extração de PKG do PS4**: aponte a pasta com os arquivos `.pkg` (jogo, patch e DLC) e o RecompHUB extrai tudo sozinho, aplicando o patch por cima do jogo, guardando os DLC e deixando de fora as variantes de MOD. O app **não inclui nem baixa** nenhuma ferramenta ou chave, você usa o que já tem (Configurações > Extrair PKG do PS4):
+  1. **PKG Extractor** (do projeto [ShadPs4Plus](https://github.com/AzaharPlus/shadPS4Plus/releases), `pkg_extractor.AppImage` no Linux ou `pkg_extractor.exe` no Windows): se você já o baixou, o RecompHUB acha em Downloads, Applications ou no PATH (ou você escolhe o arquivo) e o executa como programa externo. É o caminho recomendado.
+  2. **Arquivo de chaves** (`keys.json`, formato do shadPS4): sem o PKG Extractor, o extrator próprio do RecompHUB usa as suas chaves.
+
+  Só PKGs "fake" são suportados.
 - **Patches, atualizações e DLC**: em qualquer jogo você pode adicionar arquivos ou pastas (ex.: update 1.09, DLC, patches da comunidade); o app cria atalhos na pasta `patches/` do jogo, sem copiar.
+- **Remover a ISO/ROM do jogo com escolha**: a lixeira ao lado da ISO/ROM sempre remove o caminho dela do jogo (e o atalho na pasta de instalação, se o jogo já estiver instalado). Apagar o arquivo do computador é opcional e vem desmarcado, então dá para só tirar a ISO dali sem perdê-la. Pastas que você apontou nunca são apagadas.
 - **Aba Comunidade**: ports do GitHub que ainda não estão no PortsDR, com a mesma instalação em 1 clique. Sugira o seu pelo botão "Sugerir novo port".
 - **Barra de progresso nos Downloads**: download, descompactação e instalação aparecem na aba Downloads, mesmo trocando de página.
 - **Tela cheia**: botão para ativar/desativar tela cheia nos jogos que suportam (ex.: Ace Combat 5).
@@ -94,6 +100,8 @@ npm run dist:linux   # gera AppImage + tar.gz em ./release
 npm run dist:win     # gera .zip + instalador (Setup.exe) + portable .exe em ./release
 npm run dev:web      # só a interface no navegador, com dados de exemplo (src/renderer/dev)
 npm run test:assets  # testa a escolha do arquivo de cada release
+npm run test:vault   # testa cofre, receitas, pastas, patches e extração de PKG (--big: zip acima de 2 GB)
+npm run test:pkg     # testa o extrator de PKG próprio (PKGs sintéticos) e o uso do PKG Extractor externo (programa falso; --bench: velocidade)
 npm run audit:catalog  # confere, jogo a jogo, o que o app instalaria a partir do catálogo do PortsDR
 ```
 

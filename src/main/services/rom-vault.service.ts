@@ -12,9 +12,20 @@ import {
 import { StoreService } from './store.service'
 import { withPatchRequirement } from '../../shared/requirements'
 import {
+  extractPkgSet,
+  extractPkgSetExternal,
+  findExternalPkgExtractor,
+  findPkgKeysFile,
+  loadPkgKeysFile,
+  probePkgExtractor
+} from './pkg'
+import {
   directorySize,
   extractZipStreaming,
+  findFilesByExtension,
+  findMarkerRoot,
   formatBytes,
+  listZipNames,
   resolveExtractionRoot
 } from './archive.service'
 
@@ -238,11 +249,109 @@ export class RomVaultService {
     const pickedStat = fs.statSync(pickedFilePath)
 
     if (req?.type === 'patch') {
+      const lowerName = pickedFilePath.toLowerCase()
+      const ext = path.extname(lowerName)
+      const isCompressed =
+        COMPRESSED_ARCHIVE_EXTENSIONS.has(ext) ||
+        lowerName.endsWith('.tar.gz') ||
+        lowerName.endsWith('.tar.xz')
+
+      // 1. Arquivo .pkg direto
+      if (this.isPkgFile(pickedFilePath)) {
+        const dumpDir = this.findGameDumpDir(game)
+        if (!dumpDir) {
+          throw new Error(
+            'O jogo base ainda não foi adicionado ao Cofre. Adicione primeiro o jogo base (no campo principal acima) antes de aplicar a atualização.'
+          )
+        }
+        return this.applyPatchPkgs([pickedFilePath], dumpDir, game, req, path.basename(pickedFilePath), onProgress, {
+          recordFilePath: pickedFilePath
+        })
+      }
+
+      // 2. Pasta contendo arquivos .pkg
+      if (pickedStat.isDirectory()) {
+        const pkgs = findFilesByExtension(pickedFilePath, '.pkg', 3, 200).filter((f) => this.isPkgFile(f))
+        if (pkgs.length > 0) {
+          const dumpDir = this.findGameDumpDir(game)
+          if (!dumpDir) {
+            throw new Error(
+              'O jogo base ainda não foi adicionado ao Cofre. Adicione primeiro o jogo base (no campo principal acima) antes de aplicar a atualização.'
+            )
+          }
+          return this.applyPatchPkgs(pkgs, dumpDir, game, req, path.basename(pickedFilePath), onProgress, {
+            recordFilePath: pickedFilePath
+          })
+        }
+        return this.importPatch(pickedFilePath, pickedStat, game, req, onProgress)
+      }
+
+      // 3. Arquivo compactado (.zip, .7z, .rar, etc.)
+      if (isCompressed) {
+        let archiveHasPkg = false
+        if (lowerName.endsWith('.zip')) {
+          onProgress?.(1, `Conferindo o conteúdo de ${path.basename(pickedFilePath)}...`)
+          try {
+            const names = await listZipNames(pickedFilePath)
+            archiveHasPkg = names.some((n) => n.toLowerCase().endsWith('.pkg'))
+          } catch {
+            archiveHasPkg = false
+          }
+        }
+
+        const dumpDir = this.findGameDumpDir(game)
+        if (archiveHasPkg || (dumpDir && (lowerName.endsWith('.7z') || lowerName.endsWith('.rar')))) {
+          const archiveName = path.basename(pickedFilePath)
+          const tempExtractDir = path.join(
+            this.gameVaultDir(game),
+            '.temp_patch_' + Date.now()
+          )
+          fs.rmSync(tempExtractDir, { recursive: true, force: true })
+          onProgress?.(2, `Extraindo ${archiveName}...`)
+          const archiveShare = 0.45
+          await this.extractArchive(pickedFilePath, tempExtractDir, (pct) =>
+            onProgress?.(
+              Math.min(93, Math.max(2, Math.round(pct * archiveShare))),
+              `Extraindo ${archiveName} (${pct}%)...`
+            )
+          )
+
+          const pkgs = findFilesByExtension(tempExtractDir, '.pkg', 4, 200).filter((f) => this.isPkgFile(f))
+          if (pkgs.length > 0) {
+            if (!dumpDir) {
+              fs.rmSync(tempExtractDir, { recursive: true, force: true })
+              throw new Error(
+                'O jogo base ainda não foi adicionado ao Cofre. Adicione primeiro o jogo base (no campo principal acima) antes de aplicar a atualização.'
+              )
+            }
+            return this.applyPatchPkgs(pkgs, dumpDir, game, req, archiveName, onProgress, {
+              removeAfter: tempExtractDir,
+              progressFrom: 46,
+              recordFilePath: pickedFilePath
+            })
+          }
+          // Sem PKGs válidos dentro, limpa e prossegue para patch comum
+          fs.rmSync(tempExtractDir, { recursive: true, force: true })
+        }
+      }
+
       return this.importPatch(pickedFilePath, pickedStat, game, req, onProgress)
     }
 
     if (pickedStat.isDirectory()) {
-      return this.importDirectory(pickedFilePath, game, req, undefined, onProgress)
+      // Pasta sem o jogo extraído, mas com arquivos .pkg: o RecompHUB extrai sozinho
+      if (req?.type === 'folder' && req.markerFile && !findMarkerRoot(pickedFilePath, req.markerFile, 2)) {
+        const pkgs = findFilesByExtension(pickedFilePath, '.pkg', 3, 200)
+        if (pkgs.length > 0) {
+          return this.importFromPkgs(pkgs, game, req, path.basename(pickedFilePath), onProgress)
+        }
+      }
+      return this.importDirectory(this.resolveGameRoot(pickedFilePath, req), game, req, undefined, onProgress)
+    }
+
+    // Um único .pkg escolhido para um jogo que é pasta: extrai
+    if (req?.type === 'folder' && pickedFilePath.toLowerCase().endsWith('.pkg')) {
+      return this.importFromPkgs([pickedFilePath], game, req, path.basename(pickedFilePath), onProgress)
     }
 
     const lowerName = pickedFilePath.toLowerCase()
@@ -259,22 +368,45 @@ export class RomVaultService {
         this.gameVaultDir(game),
         path.basename(archiveName).replace(/\.(tar\.gz|tar\.xz|tgz|zip|7z|rar|gz|xz)$/i, '')
       )
+      // Antes de extrair dezenas de GB: o arquivo compactado tem mesmo o jogo? (só zip dá para listar rápido)
+      let archiveHasPkg = false
+      if (req.markerFile && pickedFilePath.toLowerCase().endsWith('.zip')) {
+        onProgress?.(1, `Conferindo o conteúdo de ${archiveName}...`)
+        const names = await listZipNames(pickedFilePath)
+        const wanted = req.markerFile.toLowerCase()
+        if (!names.some((n) => n.split('/').pop()?.toLowerCase() === wanted)) {
+          archiveHasPkg = names.some((n) => n.toLowerCase().endsWith('.pkg'))
+          if (!archiveHasPkg) throw new Error(this.missingMarkerMessage(req, false))
+          // Sem extrator nem chaves os .pkg não servem: avisa agora, antes de extrair dezenas de GB
+          await this.resolvePkgEngine()
+        }
+      }
       // Uma tentativa anterior pode ter ficado pela metade
       fs.rmSync(extractDir, { recursive: true, force: true })
       onProgress?.(2, `Extraindo ${archiveName}...`)
+      // Com .pkg lá dentro, a extração do zip é só a primeira metade do trabalho
+      const archiveShare = archiveHasPkg ? 0.45 : 0.93
       await this.extractArchive(pickedFilePath, extractDir, (pct) =>
         onProgress?.(
-          Math.min(93, Math.max(2, Math.round(pct * 0.93))),
+          Math.min(93, Math.max(2, Math.round(pct * archiveShare))),
           `Extraindo ${archiveName} (${pct}%)...`
         )
       )
-      return this.importDirectory(
-        resolveExtractionRoot(extractDir),
-        game,
-        req,
-        archiveName,
-        onProgress
-      )
+
+      const extractedRoot = resolveExtractionRoot(extractDir)
+      if (req.markerFile && !findMarkerRoot(extractedRoot, req.markerFile, 2)) {
+        const pkgs = findFilesByExtension(extractDir, '.pkg', 4, 200)
+        if (pkgs.length > 0) {
+          // Os .pkg saíram do arquivo compactado: extrai o jogo deles e apaga a cópia temporária
+          return this.importFromPkgs(pkgs, game, req, archiveName, onProgress, {
+            removeAfter: extractDir,
+            progressFrom: archiveHasPkg ? 46 : 50
+          })
+        }
+        fs.rmSync(extractDir, { recursive: true, force: true })
+        throw new Error(this.missingMarkerMessage(req, false))
+      }
+      return this.importDirectory(this.resolveGameRoot(extractedRoot, req), game, req, archiveName, onProgress)
     }
 
     let finalRomPath = pickedFilePath
@@ -333,6 +465,135 @@ export class RomVaultService {
       onProgress(100, `ISO/ROM pronta: ${entry.fileName}`)
     }
     return entry
+  }
+
+  private missingMarkerMessage(req: RomRequirement, foundPkg: boolean): string {
+    const marker = req.markerFile || 'o arquivo principal'
+    return foundPkg
+      ? `Esses arquivos são pacotes .pkg do PlayStation, não o jogo extraído: não há "${marker}". O port precisa da pasta já desempacotada. Escolha a pasta onde estão os .pkg (o RecompHUB extrai sozinho se o PKG Extractor ou o arquivo de chaves estiver configurado em Configurações) ou extraia por conta própria (por exemplo com o ShadPs4Plus PKG Extractor) e escolha a pasta resultante, a que contém o ${marker}.`
+      : `Essa pasta não parece ser o jogo extraído: não encontrei "${marker}" nela nem nas subpastas (até 2 níveis). Escolha a pasta que contém o ${marker}.`
+  }
+
+  /**
+   * Escolhe como extrair PKGs: o PKG Extractor que o usuário já tem instalado (preferido) ou o motor
+   * próprio com o arquivo de chaves dele. O RecompHUB não inclui nem baixa nenhum dos dois.
+   */
+  private async resolvePkgEngine(): Promise<
+    { kind: 'external'; file: string } | { kind: 'builtin'; keysFile: string }
+  > {
+    const settings = this.store.getSettings()
+    let extractorProblem = ''
+    const external = findExternalPkgExtractor(settings.pkgExtractorPath)
+    if (external) {
+      const probe = await probePkgExtractor(external.path)
+      if (probe.ok) return { kind: 'external', file: external.path }
+      extractorProblem = ` O PKG Extractor encontrado em "${external.path}" não funcionou: ${probe.error}`
+    }
+    const keysFile = findPkgKeysFile(settings.pkgKeysPath)
+    if (keysFile) return { kind: 'builtin', keysFile }
+    throw new Error(
+      `Esses arquivos são pacotes .pkg e precisam ser extraídos. O RecompHUB faz isso de duas formas, em Configurações > Extrair PKG do PS4: usando o PKG Extractor (ShadPs4Plus) que você já tem instalado, ou com o seu arquivo de chaves (keys.json). O app não inclui nenhum dos dois.${extractorProblem} Se preferir, extraia por conta própria e escolha a pasta já extraída, a que contém o eboot.bin.`
+    )
+  }
+
+  /**
+   * Extrai um ou mais .pkg do PS4 (jogo base + patches) para o Cofre e registra a pasta resultante.
+   * Usa o PKG Extractor do usuário ou, sem ele, o motor próprio com o arquivo de chaves dele.
+   */
+  private async importFromPkgs(
+    pkgFiles: string[],
+    game: CatalogGame,
+    req: RomRequirement,
+    sourceLabel: string,
+    onProgress?: (percent: number, stageLabel: string) => void,
+    options: { removeAfter?: string; progressFrom?: number } = {}
+  ): Promise<RomVaultEntry> {
+    let engine: Awaited<ReturnType<RomVaultService['resolvePkgEngine']>>
+    try {
+      engine = await this.resolvePkgEngine()
+    } catch (err) {
+      if (options.removeAfter) fs.rmSync(options.removeAfter, { recursive: true, force: true })
+      throw err
+    }
+
+    const gameDir = this.gameVaultDir(game)
+    const destDir = path.join(gameDir, 'pkg-extraido')
+    const addonsDir = path.join(gameDir, 'dlc-pkg')
+    fs.rmSync(destDir, { recursive: true, force: true })
+    fs.rmSync(addonsDir, { recursive: true, force: true })
+
+    const from = options.progressFrom ?? 3
+    const to = 94
+    onProgress?.(from, `Lendo ${pkgFiles.length} arquivo(s) .pkg...`)
+    let gameRoot: string
+    let addons: { dir: string }[] = []
+    let skippedCount = 0
+    try {
+      const toOverall = (percent: number): number => Math.round(from + (percent / 100) * (to - from))
+      const result =
+        engine.kind === 'external'
+          ? await extractPkgSetExternal(pkgFiles, destDir, engine.file, {
+              addonsDir,
+              onProgress: (p) =>
+                onProgress?.(
+                  toOverall(p.percent),
+                  `Extraindo ${p.pkgName} com o PKG Extractor (${p.percent}%)${p.detail ? ` — ${p.detail}` : ''}`
+                )
+            })
+          : await extractPkgSet(pkgFiles, destDir, loadPkgKeysFile(engine.keysFile), {
+              addonsDir,
+              onProgress: (p) =>
+                onProgress?.(
+                  toOverall(p.percent),
+                  `Extraindo ${p.pkgName} (${p.percent}%) — ${formatBytes(p.extractedBytes)} de ${formatBytes(p.totalBytes)}`
+                )
+            })
+      addons = result.addons
+      skippedCount = result.skipped.length
+      gameRoot = this.resolveGameRoot(destDir, req)
+    } catch (err) {
+      // Não deixa um jogo extraído pela metade ocupando o disco
+      fs.rmSync(destDir, { recursive: true, force: true })
+      fs.rmSync(addonsDir, { recursive: true, force: true })
+      throw err
+    } finally {
+      if (options.removeAfter) fs.rmSync(options.removeAfter, { recursive: true, force: true })
+    }
+
+    const entry = await this.importDirectory(gameRoot, game, req, `PKG: ${sourceLabel}`, (percent, label) =>
+      onProgress?.(
+        percent,
+        percent >= 100 && skippedCount > 0
+          ? `${label} — ${skippedCount} PKG(s) de mod ficaram de fora (para aplicar um, coloque-o na mesma pasta do jogo, fora da subpasta de mods)`
+          : label
+      )
+    )
+
+    // DLC encontrados nos PKGs entram na lista de patches/DLC do jogo
+    const patchReq = this.getRequirements(game).find((r) => r.type === 'patch')
+    if (patchReq) {
+      for (const addon of addons) {
+        if (fs.existsSync(addon.dir)) {
+          await this.importPatch(addon.dir, fs.statSync(addon.dir), game, patchReq, undefined)
+        }
+      }
+    }
+    return entry
+  }
+
+  /**
+   * Confere que a pasta é mesmo o jogo (arquivo marcador, ex.: eboot.bin) e desce até a pasta certa
+   * quando o usuário escolheu a pasta "de cima".
+   */
+  private resolveGameRoot(dir: string, req: RomRequirement | undefined): string {
+    if (!req?.markerFile) return dir
+    const root = findMarkerRoot(dir, req.markerFile, 2)
+    if (!root) {
+      throw new Error(
+        this.missingMarkerMessage(req, findFilesByExtension(dir, '.pkg', 3, 3).length > 0)
+      )
+    }
+    return root
   }
 
   /** Pasta do jogo (dump). Registrada por referência: nada é copiado. */
@@ -411,6 +672,173 @@ export class RomVaultService {
     this.store.upsertRomVaultEntry(entry)
     onProgress?.(100, `Patch pronto: ${name} (${formatBytes(size)})`)
     return entry
+  }
+
+  private isPkgFile(filePath: string): boolean {
+    if (!filePath.toLowerCase().endsWith('.pkg')) return false
+    try {
+      if (!fs.existsSync(filePath)) return false
+      const stat = fs.statSync(filePath)
+      if (stat.size < 0x1000) return false
+      const fd = fs.openSync(filePath, 'r')
+      const buf = Buffer.alloc(4)
+      fs.readSync(fd, buf, 0, 4, 0)
+      fs.closeSync(fd)
+      return buf.readUInt32BE(0) === 0x7f434e54
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Localiza a pasta do dump do jogo PS4 já desempacotada (com eboot.bin), seja no Cofre (pkg-extraido)
+   * ou em uma pasta vinculada pelo usuário.
+   */
+  private findGameDumpDir(game: CatalogGame): string | null {
+    // 1. Cofre padrão do RecompHUB (pkg-extraido)
+    const vaultPkgDir = path.join(this.gameVaultDir(game), 'pkg-extraido')
+    if (fs.existsSync(vaultPkgDir) && fs.existsSync(path.join(vaultPkgDir, 'eboot.bin'))) {
+      return vaultPkgDir
+    }
+
+    // 2. Itens já registrados no cofre para este jogo
+    const vaultEntries = this.getVaultEntries()
+    for (const entry of vaultEntries) {
+      if (entry.assignedGameIds?.includes(game.id) && entry.isDirectory && fs.existsSync(entry.filePath)) {
+        if (fs.existsSync(path.join(entry.filePath, 'eboot.bin'))) {
+          return entry.filePath
+        }
+        const marker = findMarkerRoot(entry.filePath, 'eboot.bin', 2)
+        if (marker) return marker
+      }
+    }
+
+    // 3. Jogo instalado na biblioteca
+    const installed =
+      typeof this.store.getInstalledGame === 'function'
+        ? this.store.getInstalledGame(game.id)
+        : undefined
+    if (installed?.installDir) {
+      const gd = path.join(installed.installDir, 'game_dump')
+      if (fs.existsSync(gd) && fs.existsSync(path.join(gd, 'eboot.bin'))) {
+        try {
+          return fs.realpathSync(gd)
+        } catch {
+          return gd
+        }
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Extrai um ou mais arquivos .pkg de patch/update/DLC do PS4 diretamente sobre o dump do jogo
+   * já existente no Cofre (pkg-extraido), atualizando eboot.bin, módulos e assets.
+   */
+  private async applyPatchPkgs(
+    pkgFiles: string[],
+    destDir: string,
+    game: CatalogGame,
+    patchReq: RomRequirement,
+    sourceLabel: string,
+    onProgress?: (percent: number, stageLabel: string) => void,
+    options: { removeAfter?: string; progressFrom?: number; recordFilePath?: string } = {}
+  ): Promise<RomVaultEntry> {
+    const engine = await this.resolvePkgEngine()
+    const gameDir = this.gameVaultDir(game)
+    const addonsDir = path.join(gameDir, 'dlc-pkg')
+    fs.mkdirSync(addonsDir, { recursive: true })
+
+    const from = options.progressFrom ?? 3
+    const to = 94
+    onProgress?.(from, `Lendo ${pkgFiles.length} arquivo(s) .pkg de atualização...`)
+    let addons: { dir: string }[] = []
+    let skippedCount = 0
+
+    try {
+      const toOverall = (percent: number): number => Math.round(from + (percent / 100) * (to - from))
+      const result =
+        engine.kind === 'external'
+          ? await extractPkgSetExternal(pkgFiles, destDir, engine.file, {
+              addonsDir,
+              allowPatchOnly: true,
+              onProgress: (p) =>
+                onProgress?.(
+                  toOverall(p.percent),
+                  `Aplicando atualização ${p.pkgName} (${p.percent}%)${p.detail ? ` — ${p.detail}` : ''}`
+                )
+            })
+          : await extractPkgSet(pkgFiles, destDir, loadPkgKeysFile(engine.keysFile), {
+              addonsDir,
+              allowPatchOnly: true,
+              onProgress: (p) =>
+                onProgress?.(
+                  toOverall(p.percent),
+                  `Aplicando atualização ${p.pkgName} (${p.percent}%) — ${formatBytes(p.extractedBytes)} de ${formatBytes(p.totalBytes)}`
+                )
+            })
+      addons = result.addons
+      skippedCount = result.skipped.length
+    } finally {
+      if (options.removeAfter) fs.rmSync(options.removeAfter, { recursive: true, force: true })
+    }
+
+    // Atualiza metadados do dump principal no Cofre (tamanho de bytes e mtime)
+    const { bytes } = await directorySize(destDir)
+    const stat = fs.statSync(destDir)
+    const vaultEntries = this.getVaultEntries()
+    const mainEntry = vaultEntries.find((e) => e.filePath === destDir)
+    if (mainEntry) {
+      this.store.upsertRomVaultEntry({
+        ...mainEntry,
+        size: bytes,
+        fileModifiedAt: stat.mtimeMs,
+        scannedAt: new Date().toISOString()
+      })
+    }
+
+    // Registra o patch na lista de Patches / DLC
+    const finalFilePath = options.recordFilePath || pkgFiles[0]
+    const finalFileName = sourceLabel || path.basename(finalFilePath)
+    const statForFinal = fs.existsSync(finalFilePath) ? fs.statSync(finalFilePath) : null
+    const isDir = statForFinal ? statForFinal.isDirectory() : false
+    const totalPkgSize = pkgFiles.reduce((acc, f) => {
+      try {
+        return acc + fs.statSync(f).size
+      } catch {
+        return acc
+      }
+    }, 0)
+    const fileSize = statForFinal && !isDir ? statForFinal.size : totalPkgSize || bytes
+
+    const patchEntry: RomVaultEntry = {
+      filePath: finalFilePath,
+      fileName: finalFileName,
+      size: fileSize,
+      fileModifiedAt: statForFinal?.mtimeMs || Date.now(),
+      ...this.pseudoHashes(`patch-applied:${game.id}:${finalFileName}:${Date.now()}`),
+      extension: isDir ? '' : path.extname(finalFilePath).toLowerCase(),
+      scannedAt: new Date().toISOString(),
+      assignedGameIds: [game.id],
+      assignedRequirementIds: [`${game.id}::${patchReq.id}`],
+      isDirectory: isDir,
+      kind: 'patch'
+    }
+    this.store.upsertRomVaultEntry(patchEntry)
+
+    // DLCs encontrados entram na lista de patches/DLC do jogo
+    for (const addon of addons) {
+      if (fs.existsSync(addon.dir)) {
+        await this.importPatch(addon.dir, fs.statSync(addon.dir), game, patchReq, undefined)
+      }
+    }
+
+    onProgress?.(
+      100,
+      `Atualização aplicada com sucesso: ${finalFileName}${skippedCount > 0 ? ` (${skippedCount} PKGs de mod ignorados)` : ''}!`
+    )
+    return patchEntry
   }
 
   /** Extrai qualquer formato suportado, sempre em fluxo (sem carregar o arquivo na memória). */
@@ -744,6 +1172,17 @@ export class RomVaultService {
       }
 
       const localMatch = this.findLocalMatch(req, game, localEntries)
+      // Um item registrado antes das conferências (ou que mudou no disco) pode não ser o jogo
+      if (localMatch?.isDirectory && req.markerFile && !findMarkerRoot(localMatch.filePath, req.markerFile, 2)) {
+        return {
+          requirement: req,
+          status: 'missing' as const,
+          problem: this.missingMarkerMessage(
+            req,
+            findFilesByExtension(localMatch.filePath, '.pkg', 3, 3).length > 0
+          )
+        }
+      }
       if (localMatch) {
         return {
           requirement: req,
@@ -775,6 +1214,11 @@ export class RomVaultService {
     localEntries: RomVaultEntry[]
   ): RomVaultEntry | undefined {
     const reqKey = `${game.id}::${req.id}`
+    // Se o usuário escolheu mais de um arquivo/pasta para o mesmo requisito, vale o mais recente
+    // ("Alterar" precisa realmente trocar o item usado).
+    localEntries = [...localEntries].sort((a, b) =>
+      (b.scannedAt || '').localeCompare(a.scannedAt || '')
+    )
     const byExplicitReq = localEntries.find(
       (e) =>
         e.kind !== 'patch' &&

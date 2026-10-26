@@ -60,6 +60,8 @@ export class StoreService {
         umuRunPath: 'umu-run',
         extractXisoPath: 'extract-xiso',
         githubToken: '',
+        pkgKeysPath: '',
+        pkgExtractorPath: '',
         preferNativeLinuxBuild: true,
         createPortableTxtByDefault: true,
         linkStrategy: 'symlink'

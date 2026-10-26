@@ -459,15 +459,77 @@
     "family": "GenericNative",
     "createPortableTxt": false,
     "executableHints": ["Bloodborne.exe"],
+    "helpUrl": "https://bbport.de/install/",
+    "aliasLinks": [{ "requirementId": "bloodborne_dump", "path": "../CUSA03173" }],
     "requirements": [
       {
         "id": "bloodborne_dump",
         "label": "Dump descriptografado do Bloodborne, versão 1.09 (pasta com eboot.bin) — CUSA03173",
         "type": "folder",
         "expectedFilename": "game_dump",
-        "extensions": [".pkg", ".zip", ".7z", ".rar"]
+        "markerFile": "eboot.bin",
+        "extensions": [".zip", ".7z", ".rar"]
       }
     ],
-    "notes": "Escolha a PASTA do dump (a que contém o eboot.bin), de preferência já com a atualização 1.09: os patches da comunidade (60/90 FPS, resolução, efeitos) exigem a 1.09. Na primeira abertura o launcher do Bloodborne pergunta a pasta do jogo: use o atalho game_dump criado dentro da pasta de instalação. DLC (pastas SPEXPANSIONDLC03...) podem ser adicionadas em Patches, atualizações e DLC."
+    "notes": "Escolha a PASTA do jogo já extraída (a que contém o eboot.bin) ou a pasta onde estão os arquivos .pkg: com o arquivo de chaves configurado, o RecompHUB extrai o jogo base, o patch e os DLC sozinho (variantes de MOD ficam de fora). De preferência com a atualização 1.09: os patches da comunidade (60/90 FPS, resolução, efeitos) exigem a 1.09. O RecompHUB cria o atalho CUSA03173 ao lado da pasta do port, que é onde o launcher do Bloodborne procura o jogo, então ele já abre com a pasta configurada. DLC (pastas SPEXPANSIONDLC03...) podem ser adicionadas em Patches, atualizações e DLC."
+  },
+  {
+    "id": "iss_pc",
+    "repoFullName": "HayatoG/iss_pc",
+    "title": "inFAMOUS Second Son",
+    "console": "PS4",
+    "family": "GenericNative",
+    "createPortableTxt": false,
+    "executableHints": [
+      "inFAMOUS Second Son",
+      "inFAMOUS Second Son.exe",
+      "inFAMOUS Second Son (classic)"
+    ],
+    "helpUrl": "https://github.com/HayatoG/iss_pc",
+    "aliasLinks": [
+      { "requirementId": "iss_dump", "path": "game_dump" },
+      { "requirementId": "iss_dump", "path": "CUSA00223" },
+      { "requirementId": "iss_dump", "path": "../CUSA00223" }
+    ],
+    "requirements": [
+      {
+        "id": "iss_dump",
+        "label": "Dump do inFAMOUS Second Son (CUSA00223) com Update 1.07 (pasta com eboot.bin)",
+        "type": "folder",
+        "expectedFilename": "game_dump",
+        "markerFile": "eboot.bin",
+        "extensions": [".zip", ".7z", ".rar"]
+      }
+    ],
+    "notes": "Escolha a PASTA do jogo extraída (com eboot.bin) ou a pasta/arquivo com os .pkg (jogo base + update 1.07). ATENÇÃO: O port exige os arquivos do Update 1.07 (o código e libc.prx da versão 1.00 base não são suportados pelo port). O RecompHUB pré-configura a pasta do jogo e variáveis de ambiente automaticamente no launcher para que você não precise selecioná-la manualmente."
+  },
+  {
+    "id": "tlg_pc",
+    "repoFullName": "HayatoG/tlg_pc",
+    "title": "The Last Guardian",
+    "console": "PS4",
+    "family": "GenericNative",
+    "createPortableTxt": false,
+    "executableHints": [
+      "The Last Guardian",
+      "The Last Guardian.exe"
+    ],
+    "helpUrl": "https://github.com/HayatoG/tlg_pc",
+    "aliasLinks": [
+      { "requirementId": "tlg_dump", "path": "game_dump" },
+      { "requirementId": "tlg_dump", "path": "CUSA03627" },
+      { "requirementId": "tlg_dump", "path": "../CUSA03627" }
+    ],
+    "requirements": [
+      {
+        "id": "tlg_dump",
+        "label": "Dump do The Last Guardian (CUSA03627) (pasta com eboot.bin)",
+        "type": "folder",
+        "expectedFilename": "game_dump",
+        "markerFile": "eboot.bin",
+        "extensions": [".zip", ".7z", ".rar"]
+      }
+    ],
+    "notes": "Escolha a PASTA do jogo (com eboot.bin) ou os arquivos .pkg. O RecompHUB pré-configura a pasta do jogo e variáveis de ambiente automaticamente no launcher."
   }
 ]

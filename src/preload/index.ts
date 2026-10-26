@@ -81,6 +81,12 @@ const api: RecompHubAPI = {
   setGameFullscreen: (gameId: string, fullscreen: boolean) =>
     ipcRenderer.invoke('library:setFullscreen', gameId, fullscreen),
   getActiveDownloads: () => ipcRenderer.invoke('installer:getActiveDownloads'),
+  cancelDownload: (taskId: string) =>
+    ipcRenderer.invoke('installer:cancelDownload', taskId),
+  clearFinishedDownloads: () =>
+    ipcRenderer.invoke('installer:clearFinishedDownloads'),
+  clearDownloadTask: (taskId: string) =>
+    ipcRenderer.invoke('installer:clearDownloadTask', taskId),
 
   // Library & Runner
   getLibrary: () => ipcRenderer.invoke('library:get'),
@@ -90,6 +96,12 @@ const api: RecompHubAPI = {
     ipcRenderer.invoke('library:openFolder', gameId),
   selectExecutableManually: (gameId: string) =>
     ipcRenderer.invoke('library:selectExecutable', gameId),
+  addGameToSteam: (gameId: string) =>
+    ipcRenderer.invoke('steam:addGame', gameId),
+  removeGameFromSteam: (gameId: string) =>
+    ipcRenderer.invoke('steam:removeGame', gameId),
+  isGameInSteam: (gameId: string) =>
+    ipcRenderer.invoke('steam:isGameAdded', gameId),
 
   // Settings & System
   getSettings: () => ipcRenderer.invoke('settings:get'),
@@ -99,6 +111,10 @@ const api: RecompHubAPI = {
     ipcRenderer.invoke('system:selectDirectory', title),
   selectFile: (title?: string, extensions?: string[]) =>
     ipcRenderer.invoke('system:selectFile', title, extensions),
+  getPkgExtractorStatus: () => ipcRenderer.invoke('pkg:extractorStatus'),
+  pickPkgExtractor: () => ipcRenderer.invoke('pkg:pickExtractor'),
+  getPkgKeysStatus: () => ipcRenderer.invoke('pkg:keysStatus'),
+  pickPkgKeysFile: () => ipcRenderer.invoke('pkg:pickKeysFile'),
   detectLinuxRunners: () => ipcRenderer.invoke('system:detectLinuxRunners'),
   openExternalUrl: (url: string) =>
     ipcRenderer.invoke('system:openExternal', url),
@@ -110,6 +126,12 @@ const api: RecompHubAPI = {
       callback(data)
     ipcRenderer.on('event:downloadProgress', handler)
     return () => ipcRenderer.removeListener('event:downloadProgress', handler)
+  },
+  onDownloadsUpdated: (callback: (tasks: DownloadTaskProgress[]) => void) => {
+    const handler = (_e: any, data: DownloadTaskProgress[]): void =>
+      callback(data)
+    ipcRenderer.on('event:downloadsUpdated', handler)
+    return () => ipcRenderer.removeListener('event:downloadsUpdated', handler)
   },
   onLibraryUpdated: (callback: (library: InstalledGame[]) => void) => {
     const handler = (_e: any, data: InstalledGame[]): void => callback(data)

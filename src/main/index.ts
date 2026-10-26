@@ -8,7 +8,9 @@ import { RecipeService } from './services/recipe.service'
 import { DownloaderService } from './services/downloader.service'
 import { RunnerService } from './services/runner.service'
 import { CommunityService } from './services/community.service'
+import { SteamService } from './services/steam.service'
 import { registerIpcHandlers } from './ipc/handlers'
+import { killActivePkgExtractors } from './services/pkg/external'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -87,6 +89,7 @@ app.whenReady().then(() => {
   const downloader = new DownloaderService(store, catalog, romVault, recipe)
   const runner = new RunnerService(store, downloader)
   const community = new CommunityService(store)
+  const steam = new SteamService(runner)
 
   trace('services-created')
   registerIpcHandlers(() => mainWindow, {
@@ -96,7 +99,8 @@ app.whenReady().then(() => {
     recipe,
     downloader,
     runner,
-    community
+    community,
+    steam
   })
 
   trace('ipc-registered')
@@ -107,6 +111,9 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
+
+// Não deixa o PKG Extractor rodando solto se o app for fechado no meio de uma extração
+app.on('before-quit', () => killActivePkgExtractors())
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

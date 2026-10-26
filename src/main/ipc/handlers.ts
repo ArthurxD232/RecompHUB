@@ -8,9 +8,13 @@ import { RecipeService } from '../services/recipe.service'
 import { DownloaderService } from '../services/downloader.service'
 import { RunnerService } from '../services/runner.service'
 import { CommunityService } from '../services/community.service'
+import { SteamService } from '../services/steam.service'
+import { findExternalPkgExtractor, findPkgKeysFile, loadPkgKeysFile, probePkgExtractor } from '../services/pkg'
 import {
   CatalogGame,
   InstalledGame,
+  PkgExtractorStatus,
+  PkgKeysStatus,
   SubmitPortPayload,
   UninstallGameOptions
 } from '../../shared/types'
@@ -25,9 +29,10 @@ export function registerIpcHandlers(
     downloader: DownloaderService
     runner: RunnerService
     community: CommunityService
+    steam: SteamService
   }
 ): void {
-  const { store, catalog, romVault, recipe, downloader, runner, community } = services
+  const { store, catalog, romVault, recipe, downloader, runner, community, steam } = services
 
   const findGameById = async (gameId: string): Promise<CatalogGame> => {
     const { games } = await catalog.getCatalog(false)
@@ -82,6 +87,13 @@ export function registerIpcHandlers(
     const win = getMainWindow()
     if (win && !win.isDestroyed()) {
       win.webContents.send('event:libraryUpdated', lib)
+    }
+  })
+
+  downloader.onTasksUpdated((tasks) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('event:downloadsUpdated', tasks)
     }
   })
 
@@ -150,26 +162,39 @@ export function registerIpcHandlers(
       game.recipe?.requirements.find((r) => r.id === requirementId) ||
       game.recipe?.requirements[0]
 
-    // Jogos que são uma pasta (dumps de PS4...): oferece pasta OU arquivo compactado/.pkg
+    // Jogos que são uma pasta (dumps de PS4...): pasta, .pkg ou arquivo compactado
     if (req?.type === 'folder') {
       const choice = await dialog.showMessageBox(win!, {
         type: 'question',
         title: 'Escolher o jogo',
         message: `Como está o seu ${game.title}?`,
         detail:
-          'Normalmente o dump é uma pasta (a que contém o eboot.bin). Escolher a pasta é o mais rápido: nada é copiado. Você também pode escolher um arquivo compactado (.zip, .7z, .rar) ou um .pkg; arquivos compactados são extraídos para o Cofre e precisam de espaço livre.',
-        buttons: ['Escolher a pasta do jogo', 'Escolher arquivo compactado ou .pkg', 'Cancelar'],
+          'O port precisa do jogo extraído: uma pasta com o eboot.bin dentro.\n\n• Pasta: se já está extraída, nada é copiado. Se a pasta tiver arquivos .pkg (jogo e patches), o RecompHUB extrai sozinho, usando o PKG Extractor que você já tem instalado (ou o seu arquivo de chaves), conforme Configurações.\n• Arquivo .pkg: extrai esse pacote.\n• Arquivo compactado (.zip, .7z, .rar): é extraído para o Cofre e precisa de espaço livre.',
+        buttons: [
+          'Escolher uma pasta',
+          'Escolher um arquivo .pkg',
+          'Escolher arquivo compactado',
+          'Cancelar'
+        ],
         defaultId: 0,
-        cancelId: 2,
+        cancelId: 3,
         noLink: true
       })
-      if (choice.response === 2) return null
+      if (choice.response === 3) return null
       if (choice.response === 0) {
         const dir = await dialog.showOpenDialog(win!, {
-          title: `Pasta do jogo — ${game.title}`,
+          title: `Pasta do jogo ou dos arquivos .pkg — ${game.title}`,
           properties: ['openDirectory']
         })
         return dir.canceled || dir.filePaths.length === 0 ? null : dir.filePaths[0]
+      }
+      if (choice.response === 1) {
+        const file = await dialog.showOpenDialog(win!, {
+          title: `Arquivo .pkg — ${game.title}`,
+          properties: ['openFile'],
+          filters: [{ name: 'Pacote PlayStation (.pkg)', extensions: ['pkg'] }]
+        })
+        return file.canceled || file.filePaths.length === 0 ? null : file.filePaths[0]
       }
     }
 
@@ -289,6 +314,7 @@ export function registerIpcHandlers(
       pairedRomPaths: recipeRes.pairedRomPaths,
       portableMode: recipeRes.portableMode,
       pairedPatchPaths: recipeRes.pairedPatchPaths,
+      aliasLinkPaths: recipeRes.aliasLinkPaths,
       launchArgs: game.recipe?.launchArgs ?? installed.launchArgs,
       recipeLogs: recipeRes.logs
     }
@@ -309,7 +335,8 @@ export function registerIpcHandlers(
       if (installed) {
         for (const linkPath of [
           ...(installed.pairedRomPaths || []),
-          ...(installed.pairedPatchPaths || [])
+          ...(installed.pairedPatchPaths || []),
+          ...(installed.aliasLinkPaths || [])
         ]) {
           try {
             if (fs.lstatSync(linkPath).isSymbolicLink()) fs.rmSync(linkPath, { force: true })
@@ -431,6 +458,41 @@ export function registerIpcHandlers(
         launchFullscreen: fullscreen
       }
       store.upsertInstalledGame(updated)
+
+      // Sync settings.json and user/tlg.ini if game is installed
+      try {
+        const displayModeStr = fullscreen ? 'Borderless' : 'Windowed'
+        const iniDisplayMode = fullscreen ? 'borderless' : 'windowed'
+        if (game.installDir && fs.existsSync(game.installDir)) {
+          const tlgIniPaths = [
+            path.join(game.installDir, 'user', 'tlg.ini'),
+            path.join(game.installDir, 'tlg.ini')
+          ]
+          for (const iniPath of tlgIniPaths) {
+            try {
+              if (fs.existsSync(iniPath)) {
+                let content = fs.readFileSync(iniPath, 'utf-8')
+                if (/^display_mode\s*=/m.test(content)) {
+                  content = content.replace(/^display_mode\s*=.*$/m, `display_mode=${iniDisplayMode}`)
+                } else {
+                  content = `${content.trim()}\ndisplay_mode=${iniDisplayMode}\n`
+                }
+                fs.writeFileSync(iniPath, content, 'utf-8')
+              }
+            } catch {}
+          }
+
+          const localSettings = path.join(game.installDir, 'user', 'settings.json')
+          if (fs.existsSync(localSettings)) {
+            try {
+              const cur = JSON.parse(fs.readFileSync(localSettings, 'utf-8'))
+              cur.display_mode = displayModeStr
+              fs.writeFileSync(localSettings, JSON.stringify(cur, null, 2), 'utf-8')
+            } catch {}
+          }
+        }
+      } catch {}
+
       downloader.emitLibraryUpdated()
       return updated
     }
@@ -438,6 +500,18 @@ export function registerIpcHandlers(
 
   ipcMain.handle('installer:getActiveDownloads', async () => {
     return downloader.getActiveTasks()
+  })
+
+  ipcMain.handle('installer:cancelDownload', async (_e, taskId: string) => {
+    return downloader.cancelInstall(taskId)
+  })
+
+  ipcMain.handle('installer:clearFinishedDownloads', async () => {
+    return downloader.clearFinishedTasks()
+  })
+
+  ipcMain.handle('installer:clearDownloadTask', async (_e, taskId: string) => {
+    return downloader.clearTask(taskId)
   })
 
   // Library & Runner
@@ -483,6 +557,91 @@ export function registerIpcHandlers(
     store.upsertInstalledGame(updated)
     downloader.emitLibraryUpdated()
     return updated
+  })
+
+  // Steam Integration
+  ipcMain.handle('steam:addGame', async (_e, gameId: string) => {
+    const installed = store.getInstalledGame(gameId)
+    if (!installed) {
+      throw new Error('O jogo precisa estar instalado para ser adicionado à Steam.')
+    }
+    let catalogGame: CatalogGame | undefined
+    try {
+      catalogGame = await findGameById(gameId)
+    } catch {
+      // Ignora erro ao buscar catálogo
+    }
+    return steam.addGameToSteam(installed, catalogGame)
+  })
+
+  ipcMain.handle('steam:removeGame', async (_e, gameId: string) => {
+    return steam.removeGameFromSteam(gameId)
+  })
+
+  ipcMain.handle('steam:isGameAdded', async (_e, gameId: string) => {
+    return steam.isGameInSteam(gameId)
+  })
+
+  // PKG Extractor que o usuário já tem instalado (o app não o inclui nem o baixa)
+  const pkgExtractorStatus = async (): Promise<PkgExtractorStatus> => {
+    const found = findExternalPkgExtractor(store.getSettings().pkgExtractorPath)
+    if (!found) return { path: null, source: 'none', valid: false }
+    const probe = await probePkgExtractor(found.path)
+    return { path: found.path, source: found.source, valid: probe.ok, error: probe.error }
+  }
+
+  ipcMain.handle('pkg:extractorStatus', async () => pkgExtractorStatus())
+
+  ipcMain.handle('pkg:pickExtractor', async () => {
+    const win = getMainWindow()
+    const res = await dialog.showOpenDialog(win!, {
+      title: 'Escolher o PKG Extractor (pkg_extractor)',
+      properties: ['openFile'],
+      filters:
+        process.platform === 'win32'
+          ? [
+              { name: 'PKG Extractor (pkg_extractor.exe)', extensions: ['exe'] },
+              { name: 'Todos os arquivos', extensions: ['*'] }
+            ]
+          : [{ name: 'Todos os arquivos', extensions: ['*'] }]
+    })
+    if (!res.canceled && res.filePaths.length > 0) {
+      store.updateSettings({ pkgExtractorPath: res.filePaths[0] })
+    }
+    return pkgExtractorStatus()
+  })
+
+  // Chaves para extrair PKG do PS4 (o app não inclui chaves: vêm do usuário)
+  const pkgKeysStatus = (): PkgKeysStatus => {
+    const configured = store.getSettings().pkgKeysPath
+    const found = findPkgKeysFile(configured)
+    if (!found) return { path: null, source: 'none', valid: false }
+    const source: PkgKeysStatus['source'] =
+      configured && path.resolve(configured) === path.resolve(found) ? 'config' : 'detected'
+    try {
+      loadPkgKeysFile(found)
+      return { path: found, source, valid: true }
+    } catch (err: any) {
+      return { path: found, source, valid: false, error: err?.message || String(err) }
+    }
+  }
+
+  ipcMain.handle('pkg:keysStatus', async () => pkgKeysStatus())
+
+  ipcMain.handle('pkg:pickKeysFile', async () => {
+    const win = getMainWindow()
+    const res = await dialog.showOpenDialog(win!, {
+      title: 'Escolher o arquivo de chaves (keys.json)',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Arquivo de chaves (JSON)', extensions: ['json'] },
+        { name: 'Todos os arquivos', extensions: ['*'] }
+      ]
+    })
+    if (!res.canceled && res.filePaths.length > 0) {
+      store.updateSettings({ pkgKeysPath: res.filePaths[0] })
+    }
+    return pkgKeysStatus()
   })
 
   // Settings & System

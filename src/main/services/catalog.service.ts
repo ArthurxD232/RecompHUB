@@ -55,6 +55,7 @@ const CONSOLE_ROM_SPECS: Record<
     expectedFilename: string
     extensions: string[]
     labelSuffix: string
+    markerFile?: string
   }
 > = {
   N64: {
@@ -86,8 +87,9 @@ const CONSOLE_ROM_SPECS: Record<
   PS4: {
     type: 'folder',
     expectedFilename: 'game_dump',
-    extensions: ['.pkg', '.iso'],
-    labelSuffix: 'Dump do jogo PlayStation 4 (pasta com eboot.bin, ou .zip / .7z / .rar / .pkg)'
+    extensions: ['.zip', '.7z', '.rar'],
+    labelSuffix: 'Dump já extraído do jogo PlayStation 4 (pasta com eboot.bin, ou .zip / .7z / .rar)',
+    markerFile: 'eboot.bin'
   },
   PSP: {
     type: 'iso',
@@ -269,7 +271,8 @@ export class CatalogService {
       label: `${game.title} — ${spec.labelSuffix}`,
       type: spec.type,
       expectedFilename: spec.expectedFilename,
-      extensions: spec.extensions
+      extensions: spec.extensions,
+      ...(spec.markerFile ? { markerFile: spec.markerFile } : {})
     }
 
     if (family === 'N64Recomp') {
@@ -347,6 +350,21 @@ export class CatalogService {
         requirements: [defaultRomRequirement],
         notes:
           'Receita AssetExtractor: posiciona a ROM/ISO selecionada na pasta do jogo e executa o extrator de assets (.otr/.o2r).'
+      }
+    }
+
+    if (game.consoleBadge === 'PS4' || game.console === 'PlayStation 4') {
+      return {
+        id: `heuristic_${game.id}`,
+        repoFullName: game.repoFullName,
+        title: `${game.title} (${game.projectName})`,
+        console: 'PS4',
+        family: 'GenericNative',
+        createPortableTxt: false,
+        aliasLinks: [{ requirementId: `${slug}_main_rom`, path: 'game_dump' }],
+        requirements: [defaultRomRequirement],
+        notes:
+          'Receita PS4: localiza o dump do jogo (pasta com eboot.bin), cria os atalhos necessários (game_dump, CUSA...) e pré-configura a pasta e variáveis de ambiente no launcher do jogo automaticamente.'
       }
     }
 

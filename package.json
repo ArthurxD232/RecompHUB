@@ -25,7 +25,9 @@
     "test:assets": "node scripts/test-asset-selector.mjs",
     "dev:web": "vite --config vite.web.config.ts",
     "audit:catalog": "node scripts/audit-catalog.mjs --layout",
-    "test:vault": "node scripts/test-vault.mjs"
+    "test:vault": "node scripts/test-vault.mjs",
+    "test:pkg": "node scripts/test-pkg.mjs",
+    "test:steam": "node scripts/test-steam.mjs"
   },
   "build": {
     "appId": "com.recomphub.launcher",

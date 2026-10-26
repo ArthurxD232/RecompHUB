@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
-# Publica o RecompHUB no GitHub: cria o repositório, envia o código e cria a release beta-0.2
-# com todos os arquivos de ./release anexados.
+# Publica o RecompHUB no GitHub: cria o repositório (se não existir), faz o commit das mudanças
+# pendentes, move a tag da release para o commit atual, envia o código e atualiza a release beta-0.2
+# (notas + arquivos de ./release, trocando os antigos pelos novos).
 #
 # Uso:
 #   GITHUB_TOKEN=ghp_xxx ./scripts/publish-github.sh
 #
+# Opcionais:
+#   COMMIT_MESSAGE="feat: ..."  mensagem do commit das mudanças pendentes (padrão: "chore: atualiza a <tag>")
+#   ASSUME_YES=1                não pergunta antes de commitar (útil em automações)
+#
+# Antes de commitar, o script lista os arquivos e pergunta se pode continuar. Ele também confere
+# os arquivos de ./release contra o SHA256SUMS.txt, para nunca publicar um build diferente do listado.
+#
 # O token precisa da permissão "repo" (classic) ou "Contents: Read and write" +
-# "Administration: Read and write" (fine-grained).
+# "Administration: Read and write" (fine-grained). Para enviar o arquivo da GitHub Action
+# (.github/workflows) o token classic também precisa da permissão "workflow".
 set -euo pipefail
 
 OWNER="${GITHUB_OWNER:-ArthurxD232}"
@@ -38,8 +47,32 @@ if [[ "$status" == "404" ]]; then
 EOF
 fi
 
-echo "==> Enviando código (branch main + tag ${TAG})..."
 cd "$ROOT"
+
+echo "==> Conferindo os arquivos de ./release..."
+if [[ -f release/SHA256SUMS.txt ]] && command -v sha256sum >/dev/null 2>&1; then
+  (cd release && sha256sum -c --quiet SHA256SUMS.txt) || {
+    echo "Erro: os arquivos de ./release não batem com o SHA256SUMS.txt (build incompleto ou desatualizado)." >&2
+    echo "Rode 'npm run dist' de novo e gere o SHA256SUMS.txt antes de publicar." >&2
+    exit 1
+  }
+fi
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "==> Há mudanças ainda não commitadas:"
+  git status --short
+  if [[ "${ASSUME_YES:-}" != "1" ]]; then
+    read -r -p "Fazer o commit de tudo isso e publicar? [s/N] " answer || answer=""
+    [[ "$answer" =~ ^[sSyY]$ ]] || { echo "Cancelado: nada foi commitado nem enviado."; exit 1; }
+  fi
+  git add -A
+  git commit -q -m "${COMMIT_MESSAGE:-chore: atualiza a ${TAG}}"
+  echo "    commit criado: $(git log --oneline -1)"
+fi
+# A tag sempre aponta para o commit publicado (move a tag antiga da mesma versão).
+git tag -f "$TAG" HEAD >/dev/null
+
+echo "==> Enviando código (branch main + tag ${TAG})..."
 remote_url="https://x-access-token:${GITHUB_TOKEN}@github.com/${OWNER}/${REPO}.git"
 git push "$remote_url" main
 # --force: se a tag já existir no GitHub (publicação anterior), ela é movida para o commit atual.

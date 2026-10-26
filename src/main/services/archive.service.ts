@@ -242,3 +242,62 @@ export function resolveExtractionRoot(dir: string): string {
   }
   return current
 }
+
+/**
+ * Acha a pasta que contém `marker` (ex.: eboot.bin) olhando a própria pasta e as subpastas até
+ * `maxDepth` níveis. Serve para quem escolhe a pasta "de cima" do dump (ex.: Dumps/CUSA03173/...).
+ */
+export function findMarkerRoot(dir: string, marker: string, maxDepth = 2): string | null {
+  const wanted = marker.toLowerCase()
+  let level = [dir]
+  for (let depth = 0; depth <= maxDepth; depth++) {
+    const next: string[] = []
+    for (const current of level) {
+      let entries: fs.Dirent[]
+      try {
+        entries = fs.readdirSync(current, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      if (entries.some((e) => e.isFile() && e.name.toLowerCase() === wanted)) return current
+      for (const e of entries) {
+        if (e.isDirectory() && !e.name.startsWith('.')) next.push(path.join(current, e.name))
+      }
+    }
+    level = next
+  }
+  return null
+}
+
+/** Lista os nomes dentro de um .zip lendo só o índice (não extrai nada). */
+export async function listZipNames(archivePath: string): Promise<string[]> {
+  const zip = await openZip(archivePath)
+  try {
+    const items = await readAllEntries(zip)
+    return items.map((i) => i.name.replace(/\\/g, '/'))
+  } finally {
+    zip.close()
+  }
+}
+
+/** Procura arquivos com certa extensão até `maxDepth` níveis (para avisar "isto é um .pkg"). */
+export function findFilesByExtension(dir: string, extension: string, maxDepth = 3, limit = 5): string[] {
+  const found: string[] = []
+  const walk = (current: string, depth: number): void => {
+    if (depth > maxDepth || found.length >= limit) return
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      if (found.length >= limit) return
+      const full = path.join(current, e.name)
+      if (e.isFile() && e.name.toLowerCase().endsWith(extension)) found.push(full)
+      else if (e.isDirectory() && !e.name.startsWith('.')) walk(full, depth + 1)
+    }
+  }
+  walk(dir, 0)
+  return found
+}

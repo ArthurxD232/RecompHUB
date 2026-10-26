@@ -30,6 +30,8 @@ export interface RomRequirement {
   region?: string
   /** Mantém o nome original do arquivo ao parear (útil quando o formato varia: .iso, .rvz, .wbfs...). */
   keepOriginalName?: boolean
+  /** Arquivo que identifica a raiz do jogo numa pasta (ex.: eboot.bin nos dumps de PS4). */
+  markerFile?: string
   /** Aceita vários arquivos/pastas (patches e DLC). */
   multiple?: boolean
   /** Subpasta da instalação onde os itens são vinculados (padrão dos patches: "patches"). */
@@ -64,6 +66,14 @@ export interface GameRecipe {
    * Argumentos com {ROM_PATH} são omitidos se nenhuma ISO/ROM estiver pareada.
    */
   launchArgs?: string[]
+  /** Página com o passo a passo para obter os arquivos do jogo (mostrada na tela do jogo). */
+  helpUrl?: string
+  /**
+   * Atalhos extras para a pasta/arquivo de um requisito, em lugares que o port procura sozinho
+   * (ex.: o launcher do Bloodborne olha a pasta "CUSA03173" ao lado da pasta do port).
+   * O caminho é relativo à pasta de instalação e precisa ficar dentro da pasta de jogos do app.
+   */
+  aliasLinks?: { requirementId: string; path: string }[]
   requirements: RomRequirement[]
   notes?: string
 }
@@ -266,6 +276,7 @@ export type InstallStage =
   | 'NEEDS_ROM'
   | 'RUNNING'
   | 'ERROR'
+  | 'CANCELLED'
 
 export interface DownloadTaskProgress {
   taskId: string
@@ -311,6 +322,7 @@ export interface InstalledGame {
   pairedRomPaths: string[]
   portableMode: boolean
   pairedPatchPaths?: string[]
+  aliasLinkPaths?: string[]
   launchFullscreen?: boolean
   launchArgs?: string[]
   playTimeSeconds: number
@@ -335,9 +347,30 @@ export interface AppSettings {
   umuRunPath: string
   extractXisoPath: string
   githubToken: string
+  /** Arquivo de chaves (keys.json, formato do shadPS4) para extrair PKGs do PS4. Vazio = procurar sozinho. */
+  pkgKeysPath: string
+  /** PKG Extractor (ShadPs4Plus) que o usuário já tem instalado. Vazio = procurar sozinho. */
+  pkgExtractorPath: string
   preferNativeLinuxBuild: boolean
   createPortableTxtByDefault: boolean
   linkStrategy: 'symlink' | 'hardlink' | 'copy'
+}
+
+export interface PkgKeysStatus {
+  /** Arquivo de chaves em uso (escolhido por você ou encontrado do shadPS4), se houver */
+  path: string | null
+  source: 'config' | 'detected' | 'none'
+  valid: boolean
+  error?: string
+}
+
+export interface PkgExtractorStatus {
+  /** Executável do PKG Extractor em uso (escolhido por você ou encontrado no computador), se houver */
+  path: string | null
+  source: 'config' | 'detected' | 'none'
+  /** Abre e responde como o PKG Extractor neste sistema */
+  valid: boolean
+  error?: string
 }
 
 export interface RomAvailabilityStatus {
@@ -349,7 +382,18 @@ export interface RomAvailabilityStatus {
     localEntry?: RomVaultEntry
     /** Todos os itens vinculados (requisitos com `multiple`, como os patches). */
     localEntries?: RomVaultEntry[]
+    /** O item registrado existe, mas não serve (ex.: a pasta não tem o eboot.bin). */
+    problem?: string
   }[]
+}
+
+export interface SteamShortcutResult {
+  success: boolean
+  alreadyAdded?: boolean
+  steamRunning?: boolean
+  userCount?: number
+  message?: string
+  error?: string
 }
 
 export interface RecompHubAPI {
@@ -390,6 +434,9 @@ export interface RecompHubAPI {
   removeRomVaultEntry: (filePath: string, deleteFromDisk?: boolean) => Promise<RomVaultEntry[]>
   setGameFullscreen: (gameId: string, fullscreen: boolean) => Promise<InstalledGame | null>
   getActiveDownloads: () => Promise<DownloadTaskProgress[]>
+  cancelDownload: (taskId: string) => Promise<boolean>
+  clearFinishedDownloads: () => Promise<DownloadTaskProgress[]>
+  clearDownloadTask: (taskId: string) => Promise<DownloadTaskProgress[]>
 
   // Library & Runner
   getLibrary: () => Promise<InstalledGame[]>
@@ -397,18 +444,26 @@ export interface RecompHubAPI {
   stopGame: (gameId: string) => Promise<void>
   openGameFolder: (gameId: string) => Promise<void>
   selectExecutableManually: (gameId: string) => Promise<InstalledGame | null>
+  addGameToSteam: (gameId: string) => Promise<SteamShortcutResult>
+  removeGameFromSteam: (gameId: string) => Promise<{ success: boolean; removedCount: number }>
+  isGameInSteam: (gameId: string) => Promise<boolean>
 
   // Settings & System
   getSettings: () => Promise<AppSettings>
   updateSettings: (partial: Partial<AppSettings>) => Promise<AppSettings>
   selectDirectory: (title?: string) => Promise<string | null>
   selectFile: (title?: string, extensions?: string[]) => Promise<string | null>
+  getPkgExtractorStatus: () => Promise<PkgExtractorStatus>
+  pickPkgExtractor: () => Promise<PkgExtractorStatus>
+  getPkgKeysStatus: () => Promise<PkgKeysStatus>
+  pickPkgKeysFile: () => Promise<PkgKeysStatus>
   detectLinuxRunners: () => Promise<DetectedLinuxRunner[]>
   openExternalUrl: (url: string) => Promise<void>
   getHostPlatform: () => Promise<{ platform: string; arch: string }>
 
   // Event Subscriptions
   onDownloadProgress: (callback: (progress: DownloadTaskProgress) => void) => () => void
+  onDownloadsUpdated?: (callback: (tasks: DownloadTaskProgress[]) => void) => () => void
   onLibraryUpdated: (callback: (library: InstalledGame[]) => void) => () => void
   onVaultScanProgress: (
     callback: (data: { current: number; total: number; currentFile: string }) => void

@@ -17,8 +17,10 @@ import { ensureFreeSpace, extractZipStreaming } from './archive.service'
 
 export class DownloaderService {
   private tasks = new Map<string, DownloadTaskProgress>()
+  private activeControllers = new Map<string, AbortController>()
   private progressListeners: ((progress: DownloadTaskProgress) => void)[] = []
   private libraryListeners: ((library: InstalledGame[]) => void)[] = []
+  private tasksListListeners: ((tasks: DownloadTaskProgress[]) => void)[] = []
 
   constructor(
     private store: StoreService,
@@ -41,10 +43,24 @@ export class DownloaderService {
     }
   }
 
+  public onTasksUpdated(cb: (tasks: DownloadTaskProgress[]) => void): () => void {
+    this.tasksListListeners.push(cb)
+    return () => {
+      this.tasksListListeners = this.tasksListListeners.filter((l) => l !== cb)
+    }
+  }
+
   private emitProgress(task: DownloadTaskProgress): void {
     this.tasks.set(task.taskId, { ...task, logs: [...task.logs] })
     for (const listener of this.progressListeners) {
       listener(task)
+    }
+  }
+
+  private emitTasksUpdated(): void {
+    const list = this.getActiveTasks()
+    for (const listener of this.tasksListListeners) {
+      listener(list)
     }
   }
 
@@ -59,12 +75,59 @@ export class DownloaderService {
     return Array.from(this.tasks.values())
   }
 
+  public clearFinishedTasks(): DownloadTaskProgress[] {
+    for (const [id, task] of this.tasks.entries()) {
+      if (['READY_TO_PLAY', 'NEEDS_ROM', 'ERROR', 'CANCELLED'].includes(task.stage)) {
+        this.tasks.delete(id)
+        this.activeControllers.delete(id)
+      }
+    }
+    this.emitTasksUpdated()
+    return this.getActiveTasks()
+  }
+
+  public clearTask(taskId: string): DownloadTaskProgress[] {
+    const task = this.tasks.get(taskId)
+    if (task && ['READY_TO_PLAY', 'NEEDS_ROM', 'ERROR', 'CANCELLED'].includes(task.stage)) {
+      this.tasks.delete(taskId)
+      this.activeControllers.delete(taskId)
+      this.emitTasksUpdated()
+    }
+    return this.getActiveTasks()
+  }
+
+  public async cancelInstall(taskId: string): Promise<boolean> {
+    const task = this.tasks.get(taskId)
+    if (!task) return false
+
+    const isFinished = ['READY_TO_PLAY', 'NEEDS_ROM', 'ERROR', 'CANCELLED'].includes(task.stage)
+    if (isFinished) return false
+
+    const controller = this.activeControllers.get(taskId)
+    if (controller) {
+      controller.abort()
+      this.activeControllers.delete(taskId)
+    }
+
+    task.stage = 'CANCELLED'
+    task.stageLabel = 'Download cancelado pelo usuário'
+    task.speedBytesPerSec = 0
+    task.completedAt = new Date().toISOString()
+    task.logs.push('Instalação e download cancelados pelo usuário.')
+    this.emitProgress(task)
+    this.emitTasksUpdated()
+    return true
+  }
+
   public async startInstall(
     game: CatalogGame,
     pickedRomPath?: string,
     requirementId?: string
   ): Promise<{ taskId: string }> {
     const taskId = `install_${game.id}_${Date.now()}`
+    const controller = new AbortController()
+    this.activeControllers.set(taskId, controller)
+
     const initialTask: DownloadTaskProgress = {
       taskId,
       gameId: game.id,
@@ -86,17 +149,28 @@ export class DownloaderService {
     }
 
     this.emitProgress(initialTask)
+    this.emitTasksUpdated()
 
-    this.runInstallPipeline(taskId, game, pickedRomPath, requirementId).catch(
+    this.runInstallPipeline(taskId, game, controller, pickedRomPath, requirementId).catch(
       (err) => {
+        if (
+          controller.signal.aborted ||
+          err?.name === 'AbortError' ||
+          err?.message?.includes('cancelado')
+        ) {
+          return
+        }
         const current = this.tasks.get(taskId) || initialTask
         current.stage = 'ERROR'
         current.stageLabel = 'Erro na instalação'
         current.error = err?.message || String(err)
         current.logs.push(`[ERRO] ${current.error}`)
         this.emitProgress(current)
+        this.emitTasksUpdated()
       }
-    )
+    ).finally(() => {
+      this.activeControllers.delete(taskId)
+    })
 
     return { taskId }
   }
@@ -175,6 +249,7 @@ export class DownloaderService {
           pairedRomPaths: recipeRes.pairedRomPaths,
           portableMode: recipeRes.portableMode,
           pairedPatchPaths: recipeRes.pairedPatchPaths,
+          aliasLinkPaths: recipeRes.aliasLinkPaths,
           launchArgs: game.recipe?.launchArgs ?? installed.launchArgs,
           recipeLogs: [...installed.recipeLogs, ...recipeRes.logs]
         })
@@ -208,6 +283,7 @@ export class DownloaderService {
   private async runInstallPipeline(
     taskId: string,
     game: CatalogGame,
+    controller: AbortController,
     pickedRomPath?: string,
     requirementId?: string
   ): Promise<void> {
@@ -217,203 +293,267 @@ export class DownloaderService {
       this.emitProgress(task)
     }
 
-    // Step 0: If user selected an ISO/ROM or archive (.7z/.rar/.zip), extract & import it first with progress
-    const hasIsoStep = Boolean(pickedRomPath)
-    if (pickedRomPath) {
-      log(`Processando ISO/ROM selecionada: ${path.basename(pickedRomPath)}`)
-      const entry = await this.romVault.importRomOrArchiveForGame(
-        pickedRomPath,
-        game,
-        requirementId,
-        (pct, label) => {
-          task.stage = 'EXTRACTING_ISO'
-          task.stageLabel = label
-          task.portProgress = pct
-          task.overallProgress = Math.max(2, Math.min(45, Math.round(pct * 0.45)))
+    let downloadedArchivePath = ''
+    let installDir = ''
+
+    try {
+      if (controller.signal.aborted) {
+        throw new Error('Download cancelado pelo usuário.')
+      }
+
+      // Step 0: If user selected an ISO/ROM or archive (.7z/.rar/.zip), extract & import it first with progress
+      const hasIsoStep = Boolean(pickedRomPath)
+      if (pickedRomPath) {
+        log(`Processando ISO/ROM selecionada: ${path.basename(pickedRomPath)}`)
+        const entry = await this.romVault.importRomOrArchiveForGame(
+          pickedRomPath,
+          game,
+          requirementId,
+          (pct, label) => {
+            if (controller.signal.aborted) return
+            task.stage = 'EXTRACTING_ISO'
+            task.stageLabel = label
+            task.portProgress = pct
+            task.overallProgress = Math.max(2, Math.min(45, Math.round(pct * 0.45)))
+            this.emitProgress(task)
+          }
+        )
+        if (controller.signal.aborted) throw new Error('Download cancelado pelo usuário.')
+        log(
+          `ISO/ROM pronta no Cofre: ${entry.fileName} (${(entry.size / (1024 * 1024)).toFixed(1)} MB)`
+        )
+      }
+
+      if (controller.signal.aborted) throw new Error('Download cancelado pelo usuário.')
+
+      // Step 1: Resolve GitHub release asset
+      task.stage = 'RESOLVING_RELEASE'
+      task.stageLabel = 'Consultando GitHub Releases...'
+      task.overallProgress = hasIsoStep ? 46 : 5
+      this.emitProgress(task)
+
+      const release = await this.catalog.resolveRelease(game)
+      if (controller.signal.aborted) throw new Error('Download cancelado pelo usuário.')
+      if (!release.selectedAsset) {
+        throw new Error(
+          `${release.selectionReason} (release ${release.tagName} de ${release.repoFullName}).`
+        )
+      }
+
+      log(`Release localizada: ${release.tagName} — ${release.selectionReason}`)
+      if (isInstallerAsset(release.selectedAsset.name)) {
+        log(
+          `Aviso: "${release.selectedAsset.name}" é um instalador próprio do port (não o jogo já pronto). Depois de instalar, selecione o executável do jogo manualmente.`
+        )
+      }
+
+      const settings = this.store.getSettings()
+      const folderSlug = `${game.projectName}_${game.id}`
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '_')
+        .slice(0, 64)
+      installDir = path.join(settings.installRootPath, folderSlug)
+      const tempDir = path.join(settings.installRootPath, '.tmp_downloads')
+
+      if (!fs.existsSync(installDir)) {
+        fs.mkdirSync(installDir, { recursive: true })
+      }
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true })
+      }
+
+      const assetFileName = release.selectedAsset.name
+      downloadedArchivePath = path.join(tempDir, `${taskId}_${assetFileName}`)
+
+      // O arquivo baixado e a pasta extraída existem ao mesmo tempo: calcula com folga
+      if (release.selectedAsset.size > 0) {
+        await ensureFreeSpace(
+          settings.installRootPath,
+          release.selectedAsset.size * 2 + 256 * 1024 * 1024,
+          `instalar ${assetFileName}`
+        )
+      }
+
+      if (controller.signal.aborted) throw new Error('Download cancelado pelo usuário.')
+
+      // Step 2: Download Port from GitHub
+      task.stage = 'DOWNLOADING_PORT'
+      task.stageLabel = `Baixando port: ${assetFileName}...`
+      this.emitProgress(task)
+
+      let portTotal = release.selectedAsset.size || 0
+      const baseOffset = hasIsoStep ? 46 : 5
+      const dlWeight = hasIsoStep ? 34 : 70
+
+      await this.downloadFileWithProgress(
+        release.selectedAsset.browserDownloadUrl,
+        downloadedArchivePath,
+        (received, total, speed) => {
+          if (total > 0) portTotal = total
+          task.downloadedBytes = received
+          task.totalBytes = portTotal
+          task.speedBytesPerSec = speed
+          task.portProgress =
+            portTotal > 0 ? Math.round((received / portTotal) * 100) : 50
+          task.overallProgress = Math.min(
+            80,
+            baseOffset + Math.round((task.portProgress / 100) * dlWeight)
+          )
+          this.emitProgress(task)
+        },
+        controller.signal
+      )
+
+      if (controller.signal.aborted) throw new Error('Download cancelado pelo usuário.')
+
+      task.portProgress = 100
+      task.speedBytesPerSec = 0
+      log(`Download do port concluído: ${assetFileName}`)
+
+      // Step 3: Extract Archive into installDir
+      task.stage = 'EXTRACTING_ARCHIVE'
+      task.stageLabel = `Extraindo ${assetFileName}...`
+      task.overallProgress = 84
+      this.emitProgress(task)
+
+      await this.extractOrPlaceAsset(
+        downloadedArchivePath,
+        assetFileName,
+        installDir,
+        log,
+        (pct) => {
+          if (controller.signal.aborted) return
+          task.stageLabel = `Extraindo ${assetFileName} (${pct}%)...`
+          task.overallProgress = 84 + Math.round(pct * 0.07)
           this.emitProgress(task)
         }
       )
-      log(
-        `ISO/ROM pronta no Cofre: ${entry.fileName} (${(entry.size / (1024 * 1024)).toFixed(1)} MB)`
+
+      if (controller.signal.aborted) throw new Error('Download cancelado pelo usuário.')
+      await this.extractNestedArchivesIfNeeded(installDir, log)
+
+      try {
+        if (fs.existsSync(downloadedArchivePath)) {
+          fs.unlinkSync(downloadedArchivePath)
+        }
+      } catch {
+        // Ignore
+      }
+
+      if (controller.signal.aborted) throw new Error('Download cancelado pelo usuário.')
+
+      // Step 4: Check local ROM/ISO availability and run Post-Install Recipe Engine
+      const availability = await this.romVault.checkRomAvailability(game)
+
+      task.stage =
+        game.inferredFamily === 'AssetExtractor'
+          ? 'EXTRACTING_ASSETS'
+          : 'APPLYING_RECIPE'
+      task.stageLabel = `Aplicando receita ${game.inferredFamily} e pareando ISO/ROM...`
+      task.overallProgress = 92
+      this.emitProgress(task)
+
+      const recipeResult = await this.recipeService.applyRecipe(
+        game,
+        installDir,
+        availability,
+        (recipeLog) => {
+          log(recipeLog)
+        }
       )
-    }
 
-    // Step 1: Resolve GitHub release asset
-    task.stage = 'RESOLVING_RELEASE'
-    task.stageLabel = 'Consultando GitHub Releases...'
-    task.overallProgress = hasIsoStep ? 46 : 5
-    this.emitProgress(task)
+      if (controller.signal.aborted) throw new Error('Download cancelado pelo usuário.')
 
-    const release = await this.catalog.resolveRelease(game)
-    if (!release.selectedAsset) {
-      throw new Error(
-        `${release.selectionReason} (release ${release.tagName} de ${release.repoFullName}).`
-      )
-    }
+      // Step 5: Persist InstalledGame in Library
+      const installedGame: InstalledGame = {
+        id: game.id,
+        gameId: game.id,
+        title: game.title,
+        projectName: game.projectName,
+        repoFullName: game.repoFullName,
+        console: game.console,
+        consoleBadge: game.consoleBadge,
+        version: release.tagName || game.version,
+        imageUrl: game.imageUrl,
+        installDir,
+        executablePath: recipeResult.executablePath,
+        requiresCompatibilityLayer: recipeResult.requiresCompatibilityLayer,
+        recipeFamily: game.recipe?.family || game.inferredFamily,
+        status: recipeResult.status,
+        romPaired: recipeResult.romPaired,
+        pairedRomPaths: recipeResult.pairedRomPaths,
+        portableMode: recipeResult.portableMode,
+        pairedPatchPaths: recipeResult.pairedPatchPaths,
+        aliasLinkPaths: recipeResult.aliasLinkPaths,
+        launchArgs: game.recipe?.launchArgs,
+        playTimeSeconds: 0,
+        installedAt: new Date().toISOString(),
+        recipeLogs: recipeResult.logs
+      }
 
-    log(`Release localizada: ${release.tagName} — ${release.selectionReason}`)
-    if (isInstallerAsset(release.selectedAsset.name)) {
-      log(
-        `Aviso: "${release.selectedAsset.name}" é um instalador próprio do port (não o jogo já pronto). Depois de instalar, selecione o executável do jogo manualmente.`
-      )
-    }
+      this.store.upsertInstalledGame(installedGame)
+      this.emitLibraryUpdated()
 
-    const settings = this.store.getSettings()
-    const folderSlug = `${game.projectName}_${game.id}`
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]+/g, '_')
-      .slice(0, 64)
-    const installDir = path.join(settings.installRootPath, folderSlug)
-    const tempDir = path.join(settings.installRootPath, '.tmp_downloads')
+      // Step 6: Mark task completed
+      task.stage =
+        recipeResult.status === 'READY_TO_PLAY' ? 'READY_TO_PLAY' : 'NEEDS_ROM'
+      task.stageLabel =
+        recipeResult.status === 'READY_TO_PLAY'
+          ? 'Pronto para Jogar (ISO/ROM Pareada)!'
+          : 'Port instalado — Selecione o caminho da ISO/ROM para jogar'
+      task.overallProgress = 100
+      task.completedAt = new Date().toISOString()
+      this.emitProgress(task)
+      this.emitTasksUpdated()
+    } catch (err: any) {
+      const isCancelled =
+        controller.signal.aborted ||
+        err?.name === 'AbortError' ||
+        err?.message?.includes('cancelado')
 
-    if (!fs.existsSync(installDir)) {
-      fs.mkdirSync(installDir, { recursive: true })
-    }
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true })
-    }
+      if (downloadedArchivePath) {
+        try {
+          if (fs.existsSync(downloadedArchivePath)) {
+            fs.unlinkSync(downloadedArchivePath)
+          }
+        } catch {}
+      }
 
-    const assetFileName = release.selectedAsset.name
-    const downloadedArchivePath = path.join(tempDir, `${taskId}_${assetFileName}`)
+      if (isCancelled) {
+        if (installDir) {
+          try {
+            if (fs.existsSync(installDir)) {
+              fs.rmSync(installDir, { recursive: true, force: true })
+            }
+          } catch {}
+        }
 
-    // O arquivo baixado e a pasta extraída existem ao mesmo tempo: calcula com folga
-    if (release.selectedAsset.size > 0) {
-      await ensureFreeSpace(
-        settings.installRootPath,
-        release.selectedAsset.size * 2 + 256 * 1024 * 1024,
-        `instalar ${assetFileName}`
-      )
-    }
-
-    // Step 2: Download Port from GitHub
-    task.stage = 'DOWNLOADING_PORT'
-    task.stageLabel = `Baixando port: ${assetFileName}...`
-    this.emitProgress(task)
-
-    let portTotal = release.selectedAsset.size || 0
-    const baseOffset = hasIsoStep ? 46 : 5
-    const dlWeight = hasIsoStep ? 34 : 70
-
-    await this.downloadFileWithProgress(
-      release.selectedAsset.browserDownloadUrl,
-      downloadedArchivePath,
-      (received, total, speed) => {
-        if (total > 0) portTotal = total
-        task.downloadedBytes = received
-        task.totalBytes = portTotal
-        task.speedBytesPerSec = speed
-        task.portProgress =
-          portTotal > 0 ? Math.round((received / portTotal) * 100) : 50
-        task.overallProgress = Math.min(
-          80,
-          baseOffset + Math.round((task.portProgress / 100) * dlWeight)
-        )
+        task.stage = 'CANCELLED'
+        task.stageLabel = 'Download cancelado pelo usuário'
+        task.speedBytesPerSec = 0
+        task.completedAt = new Date().toISOString()
+        task.logs.push('Instalação e download cancelados pelo usuário.')
         this.emitProgress(task)
+        this.emitTasksUpdated()
+        return
       }
-    )
 
-    task.portProgress = 100
-    task.speedBytesPerSec = 0
-    log(`Download do port concluído: ${assetFileName}`)
-
-    // Step 3: Extract Archive into installDir
-    task.stage = 'EXTRACTING_ARCHIVE'
-    task.stageLabel = `Extraindo ${assetFileName}...`
-    task.overallProgress = 84
-    this.emitProgress(task)
-
-    await this.extractOrPlaceAsset(
-      downloadedArchivePath,
-      assetFileName,
-      installDir,
-      log,
-      (pct) => {
-        task.stageLabel = `Extraindo ${assetFileName} (${pct}%)...`
-        task.overallProgress = 84 + Math.round(pct * 0.07)
-        this.emitProgress(task)
-      }
-    )
-    await this.extractNestedArchivesIfNeeded(installDir, log)
-
-    try {
-      if (fs.existsSync(downloadedArchivePath)) {
-        fs.unlinkSync(downloadedArchivePath)
-      }
-    } catch {
-      // Ignore
+      throw err
     }
-
-    // Step 4: Check local ROM/ISO availability and run Post-Install Recipe Engine
-    const availability = await this.romVault.checkRomAvailability(game)
-
-    task.stage =
-      game.inferredFamily === 'AssetExtractor'
-        ? 'EXTRACTING_ASSETS'
-        : 'APPLYING_RECIPE'
-    task.stageLabel = `Aplicando receita ${game.inferredFamily} e pareando ISO/ROM...`
-    task.overallProgress = 92
-    this.emitProgress(task)
-
-    const recipeResult = await this.recipeService.applyRecipe(
-      game,
-      installDir,
-      availability,
-      (recipeLog) => {
-        log(recipeLog)
-      }
-    )
-
-    // Step 5: Persist InstalledGame in Library
-    const installedGame: InstalledGame = {
-      id: game.id,
-      gameId: game.id,
-      title: game.title,
-      projectName: game.projectName,
-      repoFullName: game.repoFullName,
-      console: game.console,
-      consoleBadge: game.consoleBadge,
-      version: release.tagName || game.version,
-      imageUrl: game.imageUrl,
-      installDir,
-      executablePath: recipeResult.executablePath,
-      requiresCompatibilityLayer: recipeResult.requiresCompatibilityLayer,
-      recipeFamily: game.recipe?.family || game.inferredFamily,
-      status: recipeResult.status,
-      romPaired: recipeResult.romPaired,
-      pairedRomPaths: recipeResult.pairedRomPaths,
-      portableMode: recipeResult.portableMode,
-      pairedPatchPaths: recipeResult.pairedPatchPaths,
-      launchArgs: game.recipe?.launchArgs,
-      playTimeSeconds: 0,
-      installedAt: new Date().toISOString(),
-      recipeLogs: recipeResult.logs
-    }
-
-    this.store.upsertInstalledGame(installedGame)
-    this.emitLibraryUpdated()
-
-    // Step 6: Mark task completed
-    task.stage =
-      recipeResult.status === 'READY_TO_PLAY' ? 'READY_TO_PLAY' : 'NEEDS_ROM'
-    task.stageLabel =
-      recipeResult.status === 'READY_TO_PLAY'
-        ? 'Pronto para Jogar (ISO/ROM Pareada)!'
-        : 'Port instalado — Selecione o caminho da ISO/ROM para jogar'
-    task.overallProgress = 100
-    task.completedAt = new Date().toISOString()
-    this.emitProgress(task)
   }
 
   private async downloadFileWithProgress(
     url: string,
     destPath: string,
-    onChunk: (receivedBytes: number, totalBytes: number, speedBps: number) => void
+    onChunk: (receivedBytes: number, totalBytes: number, speedBps: number) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'RecompHub-Launcher/1.0'
       },
-      redirect: 'follow'
+      redirect: 'follow',
+      signal
     })
 
     if (!response.ok || !response.body) {
@@ -432,6 +572,14 @@ export class DownloaderService {
 
     try {
       while (true) {
+        if (signal?.aborted) {
+          try {
+            await reader.cancel()
+          } catch {}
+          fileStream.destroy()
+          throw new Error('Download cancelado pelo usuário.')
+        }
+
         const { done, value } = await reader.read()
         if (done) break
         if (value) {

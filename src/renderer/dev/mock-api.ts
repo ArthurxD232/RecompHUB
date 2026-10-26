@@ -184,6 +184,8 @@ const settings: AppSettings = {
   umuRunPath: 'umu-run',
   extractXisoPath: 'extract-xiso',
   githubToken: '',
+  pkgKeysPath: '',
+  pkgExtractorPath: '',
   preferNativeLinuxBuild: true,
   createPortableTxtByDefault: true,
   linkStrategy: 'symlink'
@@ -260,6 +262,8 @@ const downloads: DownloadTaskProgress[] = [
 
 // Patches adicionados durante a sessão de pré-visualização
 const mockPatches: Record<string, RomVaultEntry[]> = {}
+// ISO/ROM "escolhida" por jogo (para ver a tela do jogo com a ISO pronta)
+const mockRoms: Record<string, RomVaultEntry> = {}
 
 const findGame = (id: string): CatalogGame | undefined =>
   [...catalogGames, ...communityGames].flatMap((g) => [g, ...(g.ports || []).map((p) => ({ ...g, ...p }))]).find((g) => g.id === id)
@@ -295,9 +299,10 @@ export function installMockApi(): void {
     checkRomAvailability: async (gameId): Promise<RomAvailabilityStatus> => {
       const game = findGame(gameId)
       const requirements = withPatchRequirement(game?.recipe?.requirements || [])
+      const rom = mockRoms[gameId]
       return {
-        ready: false,
-        source: 'missing',
+        ready: Boolean(rom),
+        source: rom ? 'local_vault' : 'missing',
         matchedRequirements: requirements.map((requirement) => {
           if (requirement.type === 'patch') {
             const entries = mockPatches[gameId] || []
@@ -308,16 +313,33 @@ export function installMockApi(): void {
               localEntries: entries
             }
           }
-          return { requirement, status: 'missing' as const }
+          return rom
+            ? { requirement, status: 'local_vault' as const, localEntry: rom, localEntries: [rom] }
+            : { requirement, status: 'missing' as const }
         })
       }
     },
-    pickRomFileForGame: async () => null,
+    pickRomFileForGame: async () => '/home/jogador/roms/meu-jogo.z64',
     pickPatchesForGame: async (_id, _req, mode) =>
       mode === 'folder'
         ? ['/home/jogador/dumps/SPEXPANSIONDLC03']
         : ['/home/jogador/dumps/CUSA03173-update-1.09.pkg', '/home/jogador/dumps/community-patch-60fps.zip'],
-    importRomFileManually: async (gameId, _req, picked) => {
+    importRomFileManually: async (gameId, reqId, picked) => {
+      const requirement = findGame(gameId)?.recipe?.requirements.find((r) => r.id === reqId)
+      if (requirement && requirement.type !== 'patch') {
+        const rom: RomVaultEntry = {
+          filePath: picked || '/home/jogador/roms/meu-jogo.z64',
+          fileName: (picked || 'meu-jogo.z64').split('/').pop() || 'meu-jogo.z64',
+          size: 32 * 1024 * 1024,
+          sha1: 'mock',
+          md5: 'mock',
+          extension: '.z64',
+          scannedAt: new Date().toISOString(),
+          kind: 'main'
+        }
+        mockRoms[gameId] = rom
+        return rom
+      }
       const isDir = !/\.[a-z0-9]+$/i.test(picked || '')
       const entry: RomVaultEntry = {
         filePath: picked || '',
@@ -339,6 +361,9 @@ export function installMockApi(): void {
       library = library.filter((l) => l.gameId !== gameId)
     },
     removeRomVaultEntry: async (filePath) => {
+      for (const id of Object.keys(mockRoms)) {
+        if (mockRoms[id].filePath === filePath) delete mockRoms[id]
+      }
       for (const id of Object.keys(mockPatches)) {
         mockPatches[id] = mockPatches[id].filter((e) => e.filePath !== filePath)
       }
@@ -346,15 +371,40 @@ export function installMockApi(): void {
     },
     setGameFullscreen: async () => null,
     getActiveDownloads: async () => downloads,
+    cancelDownload: async () => true,
+    clearFinishedDownloads: async () => [],
+    clearDownloadTask: async () => [],
+    onDownloadsUpdated: subscribe,
     getLibrary: async () => library,
     launchGame: async () => ({ command: 'mock' }),
     stopGame: noop,
     openGameFolder: noop,
     selectExecutableManually: async () => null,
+    addGameToSteam: async () => ({
+      success: true,
+      alreadyAdded: false,
+      steamRunning: true,
+      userCount: 1,
+      message: 'Jogo adicionado à Steam com sucesso! Como a Steam está aberta, reinicie-a para atualizar a biblioteca.'
+    }),
+    removeGameFromSteam: async () => ({ success: true, removedCount: 1 }),
+    isGameInSteam: async () => false,
     getSettings: async () => settings,
     updateSettings: async (partial) => Object.assign(settings, partial),
     selectDirectory: async () => null,
     selectFile: async () => null,
+    getPkgExtractorStatus: async () => ({
+      path: '/home/jogador/Downloads/pkg_extractor.AppImage',
+      source: 'detected' as const,
+      valid: true
+    }),
+    pickPkgExtractor: async () => ({
+      path: '/home/jogador/Applications/pkg_extractor.AppImage',
+      source: 'config' as const,
+      valid: true
+    }),
+    getPkgKeysStatus: async () => ({ path: null, source: 'none' as const, valid: false }),
+    pickPkgKeysFile: async () => ({ path: '/home/jogador/keys.json', source: 'config' as const, valid: true }),
     detectLinuxRunners: async () => [{ type: 'umu-run', name: 'UMU Launcher (umu-run)', path: '/usr/bin/umu-run' }],
     openExternalUrl: async (url) => {
       window.open(url, '_blank')

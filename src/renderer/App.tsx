@@ -110,6 +110,10 @@ export function App(): React.ReactElement {
       }
     })
 
+    const unsubDlUpdated = window.api.onDownloadsUpdated?.((tasks) => {
+      setDownloads(tasks)
+    })
+
     const unsubCatalog = window.api.onCatalogUpdated((result) => {
       if (!result.unchanged) setCatalog(result.games)
       setCatalogSource(result.source)
@@ -132,6 +136,7 @@ export function App(): React.ReactElement {
 
     return () => {
       unsubDl()
+      unsubDlUpdated?.()
       unsubCatalog()
       unsubCommunity()
       unsubLib()
@@ -200,10 +205,25 @@ export function App(): React.ReactElement {
     await window.api.stopGame(gameId)
   }
 
-  const handleReapplyRecipe = async (gameId: string): Promise<void> => {
-    await window.api.reapplyRecipe(gameId)
+  const handleCancelDownload = async (taskId: string): Promise<void> => {
+    await window.api.cancelDownload(taskId)
+  }
+
+  const handleClearFinishedDownloads = async (): Promise<void> => {
+    const updated = await window.api.clearFinishedDownloads()
+    setDownloads(updated)
+  }
+
+  const handleClearDownloadTask = async (taskId: string): Promise<void> => {
+    const updated = await window.api.clearDownloadTask(taskId)
+    setDownloads(updated)
+  }
+
+  const handleReapplyRecipe = async (gameId: string): Promise<InstalledGame> => {
+    const updated = await window.api.reapplyRecipe(gameId)
     const updatedLib = await window.api.getLibrary()
     setLibrary(updatedLib)
+    return updated
   }
 
   const handleUninstallGame = async (
@@ -398,6 +418,7 @@ export function App(): React.ReactElement {
               onReapplyRecipe={handleReapplyRecipe}
               onUninstall={handleUninstallGame}
               onRomImported={refreshVaultAndSettings}
+              onCancelDownload={handleCancelDownload}
               onOpenDownloads={() => {
                 setSelectedGame(null)
                 setActiveTab('downloads')
@@ -451,6 +472,9 @@ export function App(): React.ReactElement {
                 <DownloadManager
                   tasks={downloads}
                   onLaunchGame={handleLaunchGame}
+                  onCancelDownload={handleCancelDownload}
+                  onClearFinished={handleClearFinishedDownloads}
+                  onClearTask={handleClearDownloadTask}
                 />
               )}
 

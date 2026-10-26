@@ -46,6 +46,7 @@ export const Library: React.FC<LibraryProps> = ({
   const [confirmGame, setConfirmGame] = useState<InstalledGame | null>(null)
   const [deleteIsoToo, setDeleteIsoToo] = useState(true)
   const [uninstalling, setUninstalling] = useState(false)
+  const [steamNotice, setSteamNotice] = useState<string | null>(null)
 
   const openGameDetails = (inst: InstalledGame): void => {
     const found = catalog.find(
@@ -85,6 +86,21 @@ export const Library: React.FC<LibraryProps> = ({
           </span>
         </div>
       </div>
+
+      {steamNotice && (
+        <div className="p-3 bg-[#162738] border border-[#316896] text-xs text-[#dcdedf] rounded-lg flex items-center justify-between gap-3 shadow">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-[#66c0f4] shrink-0" />
+            <span>{steamNotice}</span>
+          </div>
+          <button
+            onClick={() => setSteamNotice(null)}
+            className="text-xs text-[#8f98a0] hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {library.length === 0 ? (
         <div className="p-10 bg-[#16202d] border border-[#263649] rounded-lg text-center space-y-3">
@@ -173,6 +189,24 @@ export const Library: React.FC<LibraryProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      try {
+                        const res = await window.api.addGameToSteam(inst.gameId)
+                        setSteamNotice(res.message || 'Jogo adicionado à Steam!')
+                      } catch (err: any) {
+                        setSteamNotice(err?.message || 'Erro ao adicionar à Steam')
+                      }
+                    }}
+                    title="Adicionar jogo à biblioteca da Steam"
+                    className="p-2 rounded-md bg-[#243242] hover:bg-[#2a475e] border border-[#34475c] hover:border-[#66c0f4] text-[#c7d5e0] hover:text-[#66c0f4] transition-colors"
+                  >
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                      <path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.005.105.005.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 12-5.373 12-12s-5.373-12-12-12z" />
+                    </svg>
+                  </button>
+
                   <button
                     onClick={() => window.api.openGameFolder(inst.gameId)}
                     title="Abrir pasta de instalação"

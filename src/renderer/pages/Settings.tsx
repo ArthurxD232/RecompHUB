@@ -12,6 +12,8 @@ import {
 import {
   AppSettings,
   DetectedLinuxRunner,
+  PkgExtractorStatus,
+  PkgKeysStatus,
   RomVaultEntry
 } from '../../shared/types'
 
@@ -38,6 +40,13 @@ export const Settings: React.FC<SettingsProps> = ({
     settings?.githubToken || ''
   )
   const [savedBanner, setSavedBanner] = useState(false)
+  const [pkgKeys, setPkgKeys] = useState<PkgKeysStatus | null>(null)
+  const [pkgExtractor, setPkgExtractor] = useState<PkgExtractorStatus | null>(null)
+
+  useEffect(() => {
+    window.api.getPkgKeysStatus().then(setPkgKeys).catch(() => {})
+    window.api.getPkgExtractorStatus().then(setPkgExtractor).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (settings) {
@@ -391,6 +400,174 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
           </div>
         )}
+      </section>
+
+      {/* Extrair PKG do PS4: PKG Extractor do usuário ou arquivo de chaves */}
+      <section className="p-5 rounded-lg bg-[#16202d] border border-[#263649] space-y-4">
+        <div className="flex items-center gap-2.5 border-b border-[#223142] pb-2.5">
+          <Key className="w-4 h-4 text-[#67c1f5]" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+            EXTRAIR PKG DO PS4 (OPCIONAL)
+          </h3>
+        </div>
+
+        <p className="text-xs text-[#96a0aa] leading-relaxed">
+          Jogos de PS4 costumam vir em arquivos <span className="font-mono text-[#dcdedf]">.pkg</span> (jogo base,
+          patches e DLC). O RecompHUB extrai tudo sozinho de uma destas duas formas. Ele{' '}
+          <strong className="text-white">não inclui nem baixa</strong> nenhuma ferramenta ou chave: você usa o que
+          já tem, e precisa ter o direito de usar os arquivos do jogo. Só PKGs “fake” são suportados.
+        </p>
+
+        {/* Opção 1: PKG Extractor */}
+        <div className="space-y-2.5">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-[#67c1f5]">
+            Opção 1 (recomendada): PKG Extractor
+          </div>
+          <p className="text-xs text-[#96a0aa] leading-relaxed">
+            Se você já baixou o <strong className="text-white">PKG Extractor</strong> do projeto ShadPs4Plus (
+            <span className="font-mono text-[#dcdedf]">pkg_extractor.AppImage</span> no Linux,{' '}
+            <span className="font-mono text-[#dcdedf]">pkg_extractor.exe</span> no Windows), o RecompHUB acha sozinho
+            em Downloads, Applications ou no PATH, e o executa como um programa à parte. Senão, escolha o arquivo.
+          </p>
+
+          <div
+            className={`p-3 rounded-md border text-xs flex items-start gap-2.5 ${
+              pkgExtractor?.valid
+                ? 'bg-[#16301f] border-[#2f6b42] text-[#d3f0dc]'
+                : pkgExtractor?.path
+                  ? 'bg-[#4c1d1d] border-[#8c3232] text-red-100'
+                  : 'bg-[#111b26] border-[#233244] text-[#b8c4d0]'
+            }`}
+          >
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <div className="font-bold">
+                {pkgExtractor?.valid
+                  ? 'PKG Extractor pronto'
+                  : pkgExtractor?.path
+                    ? 'PKG Extractor com problema'
+                    : 'PKG Extractor não encontrado'}
+              </div>
+              {pkgExtractor?.path && (
+                <div className="font-mono text-[11px] break-all opacity-90">
+                  {pkgExtractor.path}
+                  {pkgExtractor.source === 'detected' ? ' (encontrado no computador)' : ''}
+                </div>
+              )}
+              {pkgExtractor?.error && <div>{pkgExtractor.error}</div>}
+              {!pkgExtractor?.path && (
+                <div>Nada encontrado nos lugares comuns. Escolha o arquivo do PKG Extractor, ou use a opção 2.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                setPkgExtractor(await window.api.pickPkgExtractor())
+                await onUpdateSettings({})
+                triggerSavedToast()
+              }}
+              className="rh-btn rh-btn-ghost px-4 min-h-[32px] text-[11px]"
+            >
+              Escolher o PKG Extractor…
+            </button>
+            {settings.pkgExtractorPath && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await onUpdateSettings({ pkgExtractorPath: '' })
+                  setPkgExtractor(await window.api.getPkgExtractorStatus())
+                  triggerSavedToast()
+                }}
+                className="rh-btn rh-btn-ghost px-4 min-h-[32px] text-[11px]"
+              >
+                Esquecer o arquivo escolhido
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => window.api.openExternalUrl('https://github.com/AzaharPlus/shadPS4Plus/releases')}
+              className="rh-btn rh-btn-ghost px-4 min-h-[32px] text-[11px]"
+            >
+              Página oficial do projeto
+            </button>
+          </div>
+        </div>
+
+        {/* Opção 2: arquivo de chaves */}
+        <div className="space-y-2.5 border-t border-[#223142] pt-4">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-[#67c1f5]">
+            Opção 2: arquivo de chaves
+          </div>
+          <p className="text-xs text-[#96a0aa] leading-relaxed">
+            Sem o PKG Extractor, o RecompHUB usa o extrator próprio com o seu{' '}
+            <span className="font-mono text-[#dcdedf]">keys.json</span> (o mesmo formato usado pelo shadPS4, com{' '}
+            <span className="font-mono text-[#dcdedf]">FakeKeyset</span> e{' '}
+            <span className="font-mono text-[#dcdedf]">PkgDerivedKey3Keyset</span>). Se o PKG Extractor estiver
+            pronto, ele é usado primeiro.
+          </p>
+
+          <div
+            className={`p-3 rounded-md border text-xs flex items-start gap-2.5 ${
+              pkgKeys?.valid
+                ? 'bg-[#16301f] border-[#2f6b42] text-[#d3f0dc]'
+                : pkgKeys?.path
+                  ? 'bg-[#4c1d1d] border-[#8c3232] text-red-100'
+                  : 'bg-[#111b26] border-[#233244] text-[#b8c4d0]'
+            }`}
+          >
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <div className="font-bold">
+                {pkgKeys?.valid
+                  ? 'Arquivo de chaves pronto'
+                  : pkgKeys?.path
+                    ? 'Arquivo de chaves com problema'
+                    : 'Nenhum arquivo de chaves encontrado'}
+              </div>
+              {pkgKeys?.path && (
+                <div className="font-mono text-[11px] break-all opacity-90">
+                  {pkgKeys.path}
+                  {pkgKeys.source === 'detected' ? ' (encontrado do shadPS4)' : ''}
+                </div>
+              )}
+              {pkgKeys?.error && <div>{pkgKeys.error}</div>}
+              {!pkgKeys?.path && (
+                <div>
+                  Se você já usa o shadPS4 com chaves configuradas, o RecompHUB acha sozinho. Senão, escolha o seu
+                  arquivo.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                setPkgKeys(await window.api.pickPkgKeysFile())
+                await onUpdateSettings({}) // atualiza a tela com o caminho recém-escolhido
+                triggerSavedToast()
+              }}
+              className="rh-btn rh-btn-ghost px-4 min-h-[32px] text-[11px]"
+            >
+              Escolher arquivo de chaves…
+            </button>
+            {settings.pkgKeysPath && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await onUpdateSettings({ pkgKeysPath: '' })
+                  setPkgKeys(await window.api.getPkgKeysStatus())
+                  triggerSavedToast()
+                }}
+                className="rh-btn rh-btn-ghost px-4 min-h-[32px] text-[11px]"
+              >
+                Esquecer o arquivo escolhido
+              </button>
+            )}
+          </div>
+        </div>
       </section>
 
       {/* 3. GitHub API Token */}
