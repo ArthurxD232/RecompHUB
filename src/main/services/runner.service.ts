@@ -5,12 +5,14 @@ import { ChildProcess, spawn, execSync } from 'child_process'
 import { DetectedLinuxRunner, InstalledGame } from '../../shared/types'
 import { StoreService } from './store.service'
 import { DownloaderService } from './downloader.service'
+import { ensureLusFastExtractPreloadSo, sanitizeN64PortDirectory } from './recipe.service'
 
 export class RunnerService {
   private runningProcesses = new Map<
     string,
     { process?: ChildProcess; pid?: number; startedAtMs: number; isExternal?: boolean }
   >()
+  private recentlyStoppedUntil = new Map<string, number>()
   private monitorTimer?: NodeJS.Timeout
   private isChecking = false
 
@@ -113,6 +115,7 @@ export class RunnerService {
       throw new Error('Este jogo já está em execução.')
     }
 
+    this.recentlyStoppedUntil.delete(game.gameId)
     const { cmd, args, env } = this.buildLaunchCommand(game)
     const fullCommandString = `${cmd} ${args.join(' ')}`.trim()
 
@@ -125,13 +128,15 @@ export class RunnerService {
       }
     }
 
+    // Use stdio: 'ignore' so games and AppImage runtimes never deadlock on a full 64 KB pipe buffer!
     const child = spawn(cmd, args, {
       cwd: path.dirname(game.executablePath) || game.installDir,
       env: {
         ...process.env,
         ...env
       },
-      detached: false
+      detached: false,
+      stdio: 'ignore'
     })
 
     const startedAtMs = Date.now()
@@ -187,30 +192,186 @@ export class RunnerService {
     }
   }
 
-  public async stopGame(gameId: string): Promise<void> {
-    const running = this.runningProcesses.get(gameId)
-    if (running) {
-      try {
-        if (running.process) {
-          running.process.kill('SIGTERM')
-        } else if (running.pid) {
-          process.kill(running.pid, 'SIGTERM')
-        }
-      } catch {
-        // Ignore
-      }
-      this.runningProcesses.delete(gameId)
+  /**
+   * Coleta todos os PIDs pertencentes ao jogo em execução (incluindo wrappers de AppImage,
+   * binfmt-bypass, AppRun, processos montados em /tmp/.mount_*, Wine/Proton e todos os filhos/netos).
+   */
+  private collectAllGamePids(game: InstalledGame | undefined, rootPid?: number): number[] {
+    const result = new Set<number>()
+    if (process.platform !== 'linux') {
+      if (rootPid) result.add(rootPid)
+      return Array.from(result)
     }
 
+    const selfPid = process.pid
+    const selfPpid = process.ppid
+    const parentToChildren = new Map<number, number[]>()
+    const seeds = new Set<number>()
+    if (rootPid && rootPid !== selfPid && rootPid !== selfPpid) {
+      seeds.add(rootPid)
+    }
+
+    const targetExe = game?.executablePath ? path.resolve(game.executablePath) : ''
+    const targetDir = game?.installDir ? path.resolve(game.installDir) : ''
+    const exeBase = targetExe ? path.basename(targetExe).toLowerCase() : ''
+    const exeStem = exeBase.replace(/\.(appimage|exe|sh)$/i, '')
+
+    try {
+      const entries = fs.readdirSync('/proc')
+      for (const name of entries) {
+        if (!/^\d+$/.test(name)) continue
+        const pid = parseInt(name, 10)
+        if (pid <= 1 || pid === selfPid || pid === selfPpid) continue
+
+        // 1. Read PPID from /proc/<pid>/stat
+        try {
+          const statStr = fs.readFileSync(`/proc/${name}/stat`, 'utf8')
+          const closeParen = statStr.lastIndexOf(')')
+          if (closeParen !== -1) {
+            const after = statStr.slice(closeParen + 2).trim().split(/\s+/)
+            const ppid = parseInt(after[1], 10)
+            if (!isNaN(ppid) && ppid > 1) {
+              const list = parentToChildren.get(ppid) || []
+              list.push(pid)
+              parentToChildren.set(ppid, list)
+            }
+          }
+        } catch {}
+
+        if (!game) continue
+
+        // 2. Check exe, cmdline, cwd, and APPIMAGE env vars
+        let exeLink = ''
+        try {
+          exeLink = fs.readlinkSync(`/proc/${name}/exe`)
+        } catch {}
+
+        let rawCmd = ''
+        try {
+          rawCmd = fs.readFileSync(`/proc/${name}/cmdline`, 'utf8')
+        } catch {}
+
+        let cwdLink = ''
+        try {
+          cwdLink = fs.readlinkSync(`/proc/${name}/cwd`)
+        } catch {}
+
+        if (targetExe && (exeLink === targetExe || rawCmd.includes(targetExe))) {
+          seeds.add(pid)
+          continue
+        }
+
+        if (targetDir && (exeLink.startsWith(targetDir + path.sep) || rawCmd.includes(targetDir))) {
+          seeds.add(pid)
+          continue
+        }
+
+        if (
+          exeStem.length >= 3 &&
+          exeLink &&
+          path.basename(exeLink).toLowerCase() === exeStem &&
+          (exeLink.startsWith('/tmp/.mount_') ||
+            exeLink.startsWith('/tmp/appimage_extracted_') ||
+            (targetDir && cwdLink.startsWith(targetDir)))
+        ) {
+          seeds.add(pid)
+          continue
+        }
+      }
+
+      // Walk descendant tree from all seeds
+      const queue = Array.from(seeds)
+      while (queue.length > 0) {
+        const cur = queue.shift()!
+        if (result.has(cur) || cur === selfPid || cur === selfPpid) continue
+        result.add(cur)
+        const children = parentToChildren.get(cur) || []
+        for (const ch of children) {
+          if (!result.has(ch)) queue.push(ch)
+        }
+      }
+    } catch {}
+
+    return Array.from(result)
+  }
+
+  public async stopGame(gameId: string): Promise<void> {
+    // Bloqueia re-detecção imediata durante o encerramento da árvore de processos
+    this.recentlyStoppedUntil.set(gameId, Date.now() + 8000)
+
+    const running = this.runningProcesses.get(gameId)
     const game = this.store.getInstalledGame(gameId)
-    if (game && game.status === 'RUNNING') {
+
+    if (process.platform === 'linux') {
+      const pids = this.collectAllGamePids(game, running?.pid)
+      // Envia SIGTERM primeiro (dos filhos para o pai)
+      for (const pid of [...pids].reverse()) {
+        try {
+          process.kill(pid, 'SIGTERM')
+        } catch {}
+      }
+      if (running?.process) {
+        try {
+          running.process.kill('SIGTERM')
+        } catch {}
+      }
+
+      // Aguarda até 400ms pelo encerramento gracioso; se ainda houver sobreviventes, envia SIGKILL (-9)
+      for (let i = 0; i < 4; i++) {
+        await new Promise((r) => setTimeout(r, 100))
+        const remaining = this.collectAllGamePids(game, running?.pid).filter((p) =>
+          this.isPidAlive(p)
+        )
+        if (remaining.length === 0) break
+      }
+
+      const survivors = this.collectAllGamePids(game, running?.pid)
+      for (const pid of [...survivors].reverse()) {
+        try {
+          process.kill(pid, 'SIGKILL')
+        } catch {}
+      }
+      if (running?.process) {
+        try {
+          running.process.kill('SIGKILL')
+        } catch {}
+      }
+      await new Promise((r) => setTimeout(r, 120))
+    } else if (process.platform === 'win32') {
+      if (running?.pid) {
+        try {
+          execSync(`taskkill /PID ${running.pid} /T /F`, { stdio: 'ignore', timeout: 3000 })
+        } catch {}
+      }
+      if (game?.executablePath) {
+        const exeName = path.basename(game.executablePath)
+        try {
+          execSync(`taskkill /IM "${exeName}" /T /F`, { stdio: 'ignore', timeout: 3000 })
+        } catch {}
+      }
+      if (running?.process) {
+        try {
+          running.process.kill()
+        } catch {}
+      }
+    } else if (running) {
+      try {
+        if (running.process) running.process.kill('SIGTERM')
+        else if (running.pid) process.kill(running.pid, 'SIGTERM')
+      } catch {}
+    }
+
+    this.runningProcesses.delete(gameId)
+
+    const latestGame = this.store.getInstalledGame(gameId)
+    if (latestGame) {
       const elapsedSeconds = running
         ? Math.max(1, Math.round((Date.now() - running.startedAtMs) / 1000))
         : 0
       this.store.upsertInstalledGame({
-        ...game,
-        status: game.romPaired ? 'READY_TO_PLAY' : 'NEEDS_ROM',
-        playTimeSeconds: (game.playTimeSeconds || 0) + elapsedSeconds,
+        ...latestGame,
+        status: latestGame.romPaired ? 'READY_TO_PLAY' : 'NEEDS_ROM',
+        playTimeSeconds: (latestGame.playTimeSeconds || 0) + elapsedSeconds,
         lastPlayedAt: new Date().toISOString()
       })
       this.downloader.emitLibraryUpdated()
@@ -229,28 +390,61 @@ export class RunnerService {
     if (process.platform === 'linux') {
       try {
         const pids = fs.readdirSync('/proc')
+        const selfPid = process.pid
+        const parentsWithChildren = new Set<number>()
+        const procInfo: Array<{ pid: number; exeLink: string; rawCmd: string }> = []
+
         for (const name of pids) {
           if (!/^\d+$/.test(name)) continue
           const pid = parseInt(name, 10)
-          try {
-            const exeLink = fs.readlinkSync(`/proc/${name}/exe`)
-            if (exeLink) {
-              runningMap.set(exeLink, pid)
-              runningMap.set(path.basename(exeLink).toLowerCase(), pid)
-            }
-          } catch {}
+          if (pid <= 1 || pid === selfPid) continue
 
           try {
-            const rawCmd = fs.readFileSync(`/proc/${name}/cmdline`, 'utf8')
-            if (rawCmd) {
-              const parts = rawCmd.split('\0')
-              for (const p of parts) {
-                if (!p || p.startsWith('-')) continue
-                runningMap.set(p, pid)
-                runningMap.set(path.basename(p).toLowerCase(), pid)
+            const statStr = fs.readFileSync(`/proc/${name}/stat`, 'utf8')
+            const closeParen = statStr.lastIndexOf(')')
+            if (closeParen !== -1) {
+              const after = statStr.slice(closeParen + 2).trim().split(/\s+/)
+              // Ignore zombie processes (state 'Z')
+              if (after[0] === 'Z') continue
+              const ppid = parseInt(after[1], 10)
+              if (!isNaN(ppid) && ppid > 1) {
+                parentsWithChildren.add(ppid)
               }
             }
           } catch {}
+
+          let exeLink = ''
+          try {
+            exeLink = fs.readlinkSync(`/proc/${name}/exe`)
+          } catch {}
+
+          let rawCmd = ''
+          try {
+            rawCmd = fs.readFileSync(`/proc/${name}/cmdline`, 'utf8')
+          } catch {}
+
+          procInfo.push({ pid, exeLink, rawCmd })
+        }
+
+        for (const { pid, exeLink, rawCmd } of procInfo) {
+          // Ignore orphaned appimagelauncher binfmt-bypass processes that have no running child
+          if (exeLink.endsWith('/binfmt-bypass') && !parentsWithChildren.has(pid)) {
+            continue
+          }
+
+          if (exeLink) {
+            runningMap.set(exeLink, pid)
+            runningMap.set(path.basename(exeLink).toLowerCase(), pid)
+          }
+
+          if (rawCmd) {
+            const parts = rawCmd.split('\0')
+            for (const p of parts) {
+              if (!p || p.startsWith('-')) continue
+              runningMap.set(p, pid)
+              runningMap.set(path.basename(p).toLowerCase(), pid)
+            }
+          }
         }
       } catch {}
       return runningMap
@@ -323,6 +517,23 @@ export class RunnerService {
         if (!game.executablePath || !fs.existsSync(game.executablePath)) continue
         if (this.runningProcesses.has(game.gameId)) continue
 
+        // Se o jogo acabou de ser parado pelo usuário, nunca reativar como RUNNING
+        const stoppedUntil = this.recentlyStoppedUntil.get(game.gameId)
+        if (stoppedUntil) {
+          if (Date.now() < stoppedUntil) {
+            if (game.status === 'RUNNING') {
+              this.store.upsertInstalledGame({
+                ...game,
+                status: game.romPaired ? 'READY_TO_PLAY' : 'NEEDS_ROM'
+              })
+              this.downloader.emitLibraryUpdated()
+            }
+            continue
+          } else {
+            this.recentlyStoppedUntil.delete(game.gameId)
+          }
+        }
+
         const targetExe = path.resolve(game.executablePath)
         const exeBase = path.basename(targetExe).toLowerCase()
 
@@ -379,6 +590,13 @@ export class RunnerService {
   public prepareLaunchEnvironment(game: InstalledGame): void {
     const execDir = path.dirname(game.executablePath) || game.installDir
     const extraEnv: Record<string, string> = {}
+    if (
+      game.consoleBadge === 'N64' ||
+      game.recipeFamily === 'N64Recomp' ||
+      game.recipeFamily === 'AssetExtractor'
+    ) {
+      sanitizeN64PortDirectory(game.installDir)
+    }
     this.ensurePs4LaunchEnvironment(game, execDir, extraEnv)
   }
 
@@ -416,7 +634,8 @@ export class RunnerService {
 
     if (isLinux) {
       if (isAppImage) {
-        return `env -u LD_LIBRARY_PATH -u LD_PRELOAD APPIMAGE_EXTRACT_AND_RUN=1 %command%${extraArgs.length > 0 ? ' ' + extraArgs.join(' ') : ''}`
+        const fuseFlag = fs.existsSync('/dev/fuse') ? '' : ' APPIMAGE_EXTRACT_AND_RUN=1'
+        return `env -u LD_LIBRARY_PATH -u LD_PRELOAD${fuseFlag} %command%${extraArgs.length > 0 ? ' ' + extraArgs.join(' ') : ''}`
       }
       if (!isExe) {
         // Binário ELF nativo Linux (como inFAMOUS Second Son, TLG, etc.)
@@ -554,19 +773,37 @@ export class RunnerService {
       extraEnv.PS2_RN_CENSUS = '0'
     }
 
+    // Ensure N64 Port environment (clear stuck ModalWindow: 1 and attach fast GameExtractor::Parse bypass on Linux)
+    if (
+      game.consoleBadge === 'N64' ||
+      game.recipeFamily === 'N64Recomp' ||
+      game.recipeFamily === 'AssetExtractor'
+    ) {
+      sanitizeN64PortDirectory(game.installDir)
+      if (isLinux && !isExe && (game.recipeFamily === 'AssetExtractor' || game.consoleBadge === 'N64')) {
+        const preloadSo = ensureLusFastExtractPreloadSo()
+        if (preloadSo) {
+          extraEnv.LD_PRELOAD = process.env.LD_PRELOAD
+            ? `${preloadSo}:${process.env.LD_PRELOAD}`
+            : preloadSo
+        }
+      }
+    }
+
     // Ensure PS4 Port environment (launcher settings & env vars)
     this.ensurePs4LaunchEnvironment(game, execDir, extraEnv)
 
     // Native execution on Windows or native Linux binary
     if (!isLinux || !isExe) {
       if (isLinux && isAppImage) {
+        const envForAppImage: Record<string, string> = { ...extraEnv }
+        if (!fs.existsSync('/dev/fuse')) {
+          envForAppImage.APPIMAGE_EXTRACT_AND_RUN = '1'
+        }
         return {
           cmd: game.executablePath,
           args: [...extraArgs],
-          env: {
-            ...extraEnv,
-            APPIMAGE_EXTRACT_AND_RUN: '1'
-          }
+          env: envForAppImage
         }
       }
       if (!isLinux && /\.(bat|cmd)$/i.test(game.executablePath)) {
@@ -678,6 +915,27 @@ export class RunnerService {
     extraEnv: Record<string, string>
   ): void {
     try {
+      const isPs4Port =
+        game.consoleBadge === 'PS4' ||
+        fs.existsSync(path.join(execDir, 'port.env')) ||
+        fs.existsSync(path.join(game.installDir, 'port.env')) ||
+        fs.existsSync(path.join(game.installDir, 'launcher', 'port.env')) ||
+        fs.existsSync(path.join(game.installDir, 'game_dump', 'eboot.bin')) ||
+        Boolean(
+          game.pairedRomPaths?.some((p) => {
+            try {
+              return (
+                fs.existsSync(p) &&
+                fs.statSync(p).isDirectory() &&
+                fs.existsSync(path.join(p, 'eboot.bin'))
+              )
+            } catch {
+              return false
+            }
+          })
+        )
+      if (!isPs4Port) return
+
       // Find game dump path
       let dumpDir = game.pairedRomPaths?.find((p) => {
         try {

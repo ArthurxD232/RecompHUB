@@ -17,14 +17,14 @@
         "id": "mm_us_10",
         "label": "Majora's Mask (USA) v1.0 Big-Endian (.z64)",
         "type": "rom",
-        "expectedFilename": "mm.us.rev1.rom.z64",
+        "expectedFilename": "mm.n64.us.1.0.z64",
         "sha1": ["d6133ace5afaa0882cf214cf88daba39e266c078"],
         "md5": ["2a0a8acb61538235bc1094d297fb6556"],
         "extensions": [".z64", ".n64", ".v64"],
         "region": "USA"
       }
     ],
-    "notes": "Cria automaticamente portable.txt e vincula a ROM USA v1.0 como mm.us.rev1.rom.z64."
+    "notes": "Cria automaticamente portable.txt e vincula a ROM USA v1.0 como mm.n64.us.1.0.z64 para inicialização imediata."
   },
   {
     "id": "banjorecomp",
@@ -43,14 +43,14 @@
         "id": "bk_us_10",
         "label": "Banjo-Kazooie (USA) v1.0 (.z64)",
         "type": "rom",
-        "expectedFilename": "banjo.us.v10.z64",
+        "expectedFilename": "bk.n64.us.1.0.z64",
         "sha1": ["1fe1632098865f639e22c11b9a81ee8f29c75d7a"],
         "md5": ["b29599651a13f681c9923d69354bf4a3"],
         "extensions": [".z64", ".n64", ".v64"],
         "region": "USA"
       }
     ],
-    "notes": "Configuração 1-Click N64Recomp com portable.txt e vínculo automático banjo.us.v10.z64."
+    "notes": "Configuração 1-Click N64Recomp com portable.txt e vínculo automático bk.n64.us.1.0.z64."
   },
   {
     "id": "banjotooierecomp",
@@ -130,7 +130,7 @@
         "id": "bm64_us",
         "label": "Bomberman 64 (USA) (.z64)",
         "type": "rom",
-        "expectedFilename": "bm64.us.z64",
+        "expectedFilename": "bm64_us.z64",
         "sha1": ["3f1d74a8dc4cd0fd80f2ef7bc43d8936a1a41f14"],
         "extensions": [".z64", ".n64", ".v64"],
         "region": "USA"
@@ -150,7 +150,7 @@
         "id": "bmhero_us",
         "label": "Bomberman Hero (USA) (.z64)",
         "type": "rom",
-        "expectedFilename": "bmhero.us.z64",
+        "expectedFilename": "bmhero.z64",
         "sha1": ["62364ef5cc47f0a69d52cd8cb6c2e41e773fb1da"],
         "extensions": [".z64", ".n64", ".v64"],
         "region": "USA"
@@ -170,7 +170,7 @@
         "id": "goemon_us",
         "label": "Mystical Ninja Starring Goemon (USA) (.z64)",
         "type": "rom",
-        "expectedFilename": "goemon64.us.z64",
+        "expectedFilename": "mnsg.us.z64",
         "sha1": ["56fc3eb7f9f5d79b22ce8d320fe474ba3a14c210"],
         "extensions": [".z64", ".n64", ".v64"],
         "region": "USA"
@@ -427,6 +427,137 @@
         "extensions": [".z64", ".n64", ".v64"]
       }
     ]
+  },
+  {
+    "id": "ghostship",
+    "repoFullName": "HarbourMasters/Ghostship",
+    "title": "Super Mario 64 (Ghostship)",
+    "console": "N64",
+    "family": "AssetExtractor",
+    "extractorConfig": {
+      "binaryPatterns": ["ghostship.appimage", "Ghostship.exe", "ghostship", "torch"],
+      "cliArgs": ["--extract-assets"],
+      "expectedOutputFiles": ["sm64.o2r"]
+    },
+    "executableHints": ["ghostship.appimage", "Ghostship.exe", "ghostship"],
+    "requirements": [
+      {
+        "id": "sm64_us",
+        "label": "Super Mario 64 (USA / JP) Big-Endian (.z64)",
+        "type": "rom",
+        "expectedFilename": "baserom.us.z64",
+        "sha1": [
+          "9bef1128717f958171a4afac3ed78ee2bb4e86ce",
+          "8a20a5c83d6ceb0f0506cfc9fa20d8f438cafe51"
+        ],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA/JP"
+      }
+    ],
+    "notes": "Posiciona a ROM de Super Mario 64 (USA/JP) como baserom.us.z64 e gera automaticamente o arquivo de assets sm64.o2r."
+  },
+  {
+    "id": "starship",
+    "repoFullName": "HarbourMasters/Starship",
+    "title": "Star Fox 64 (Starship)",
+    "console": "N64",
+    "family": "AssetExtractor",
+    "extractorConfig": {
+      "binaryPatterns": ["starship.appimage", "Starship.exe", "starship", "torch"],
+      "cliArgs": ["--extract-assets"],
+      "expectedOutputFiles": ["sf64.o2r"]
+    },
+    "executableHints": ["starship.appimage", "Starship.exe", "starship"],
+    "requirements": [
+      {
+        "id": "sf64_us",
+        "label": "Star Fox 64 (USA v1.0 / v1.1) (.z64)",
+        "type": "rom",
+        "expectedFilename": "baserom.us.rev1.z64",
+        "sha1": [
+          "09f0d105f4fbe6d006fb8fa5064f6c4598c44836",
+          "d8b1088520f7c5f81433292a9258c1184afa1457"
+        ],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Posiciona a ROM de Star Fox 64 e gera automaticamente o pacote sf64.o2r."
+  },
+  {
+    "id": "lighthouse",
+    "repoFullName": "HarbourMasters/Lighthouse",
+    "title": "Banjo-Kazooie (Lighthouse)",
+    "console": "N64",
+    "family": "AssetExtractor",
+    "extractorConfig": {
+      "binaryPatterns": ["lighthouse.appimage", "Lighthouse.exe", "lighthouse", "torch"],
+      "cliArgs": ["--extract-assets"],
+      "expectedOutputFiles": ["bk.o2r"]
+    },
+    "executableHints": ["lighthouse.appimage", "Lighthouse.exe", "lighthouse"],
+    "requirements": [
+      {
+        "id": "bk_us",
+        "label": "Banjo-Kazooie (USA v1.0) (.z64)",
+        "type": "rom",
+        "expectedFilename": "baserom.us.v10.z64",
+        "sha1": ["1fe1632098865f639e22c11b9a81ee8f29c75d7a"],
+        "md5": ["b29599651a13f681c9923d69354bf4a3"],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Posiciona a ROM de Banjo-Kazooie e gera automaticamente o pacote bk.o2r."
+  },
+  {
+    "id": "paperboat",
+    "repoFullName": "HarbourMasters/PaperBoat",
+    "title": "Paper Mario (PaperBoat)",
+    "console": "N64",
+    "family": "AssetExtractor",
+    "extractorConfig": {
+      "binaryPatterns": ["paperboat.appimage", "PaperBoat.exe", "paperboat", "torch"],
+      "cliArgs": ["--extract-assets"],
+      "expectedOutputFiles": ["pm64.o2r"]
+    },
+    "executableHints": ["paperboat.appimage", "PaperBoat.exe", "paperboat"],
+    "requirements": [
+      {
+        "id": "pm64_us",
+        "label": "Paper Mario (USA) (.z64)",
+        "type": "rom",
+        "expectedFilename": "baserom.us.z64",
+        "sha1": ["3837f44cda784b466c9a2d99df70d77c322b97a0"],
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Posiciona a ROM de Paper Mario e gera automaticamente o pacote pm64.o2r."
+  },
+  {
+    "id": "battleship",
+    "repoFullName": "JRickey/BattleShip",
+    "title": "Super Smash Bros. (BattleShip)",
+    "console": "N64",
+    "family": "AssetExtractor",
+    "extractorConfig": {
+      "binaryPatterns": ["battleship.appimage", "BattleShip.exe", "battleship", "torch"],
+      "cliArgs": ["--extract-assets"],
+      "expectedOutputFiles": ["ssb64.o2r"]
+    },
+    "executableHints": ["battleship.appimage", "BattleShip.exe", "battleship"],
+    "requirements": [
+      {
+        "id": "ssb64_us",
+        "label": "Super Smash Bros. (USA) (.z64)",
+        "type": "rom",
+        "expectedFilename": "baserom.us.z64",
+        "extensions": [".z64", ".n64", ".v64"],
+        "region": "USA"
+      }
+    ],
+    "notes": "Posiciona a ROM de Super Smash Bros. e gera automaticamente o pacote ssb64.o2r."
   },
   {
     "id": "opengoal",

@@ -19,7 +19,7 @@ import { selectBestAsset } from './asset-selector'
 import recipesData from '../data/recipes.json'
 
 // Aumente quando mudar a forma de interpretar o HTML do PortsDR (invalida o hash de "página sem mudanças").
-const CATALOG_PARSER_VERSION = 3
+const CATALOG_PARSER_VERSION = 4
 // Com cache local a atualização ao vivo espera a janela terminar de abrir (a lista já aparece pelo cache).
 const BACKGROUND_SYNC_DELAY_MS = 2500
 
@@ -226,11 +226,16 @@ export class CatalogService {
     const combined = `${projectName} ${repoFullName}`.toLowerCase()
 
     if (
+      combined.includes('harbourmasters') ||
       combined.includes('harkinian') ||
       combined.includes('shipwright') ||
       combined.includes('2ship') ||
       combined.includes('spaghettikart') ||
       combined.includes('starship') ||
+      combined.includes('ghostship') ||
+      combined.includes('lighthouse') ||
+      combined.includes('paperboat') ||
+      combined.includes('battleship') ||
       combined.includes('opengoal') ||
       combined.includes('jak-project')
     ) {

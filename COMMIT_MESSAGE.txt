@@ -1,8 +1,7 @@
-feat: integracao com Steam (1-clique), sincronizacao de execucao, modo de tela cheia e patches no topo
+fix: corrigir execucao e encerramento completo de jogos N64/AppImage e adicionar confirmacao ao Parar
 
-- Integracao completa com a Steam: adicionar/remover jogos da Steam em 1 clique via shortcuts.vdf binario, com geracao e copia automatica de capas da grade (vertical e horizontal) e icones em alta resolucao no userdata da Steam (Linux e Windows).
-- Sanitizacao de runtime da Steam: geracao automatica de LaunchOptions ('env -u LD_LIBRARY_PATH -u LD_PRELOAD %command%') no Linux para evitar conflitos de bibliotecas do runtime legado da Steam com drivers graficos Mesa/Vulkan/Wayland modernos (PySide6/Qt6), alem de correcao de aspas literais no StartDir.
-- Sincronizacao de status de execucao em tempo real: RunnerService monitora os processos ativos (via /proc em passe unico no Linux e tasklist no Windows), detectando instantaneamente quando um jogo e aberto pela Steam ou externamente, exibindo "EM EXECUCAO" na biblioteca e contabilizando o tempo jogado ao fechar.
-- Modo de tela cheia configuravel: alternancia entre Tela Cheia (Borderless) e Modo Janela direto no modal do jogo, com sincronizacao automatica em settings.json, user/tlg.ini e %APPDATA%.
-- Destaque visual de Patches e DLC: secao de atualizacoes reposicionada no topo do modal para acesso rapido, com suporte a patches .pkg, zips com PKG e pastas de DLC.
-- Gerenciador de downloads: botao para cancelar downloads em andamento e acao para limpar historico de downloads concluidos.
+- Corrige o bloqueio na abertura do Super Mario 64 (Ghostship) e Majora's Mask (2Ship2Harkinian) usando stdio: 'ignore' no spawn do RunnerService (evitando deadlock do buffer de 64 KB do pipe de stderr do AppImage) e montando via FUSE quando disponivel.
+- Implementa encerramento completo da arvore de processos no botao Parar (coletando o processo raiz, wrappers binfmt-bypass/AppRun, binarios montados em /tmp/.mount_* e filhos/netos com escalonamento para SIGKILL / taskkill /T /F), evitando que o jogo continue aberto ou volte sozinho para "Parar".
+- Adiciona pop-up de confirmacao ao clicar em Parar antes de fechar o jogo em execucao.
+- Corrige a extracao de assets (.o2r) nos ports HarbourMasters/Torch e detecta automaticamente o <game_id>.z64 esperado por check_stored_rom nos ports N64Recomp.
+- Ignora pacotes Flatpak e Snap (mesmo encapsulados em .zip, como no Zelda64Recomp) no seletor de assets.

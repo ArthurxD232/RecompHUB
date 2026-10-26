@@ -66,6 +66,9 @@ if [[ -n "$(git status --porcelain)" ]]; then
     [[ "$answer" =~ ^[sSyY]$ ]] || { echo "Cancelado: nada foi commitado nem enviado."; exit 1; }
   fi
   git add -A
+  if [[ -z "${COMMIT_MESSAGE:-}" && -f "$ROOT/COMMIT_MESSAGE.txt" ]]; then
+    COMMIT_MESSAGE="$(cat "$ROOT/COMMIT_MESSAGE.txt")"
+  fi
   git commit -q -m "${COMMIT_MESSAGE:-chore: atualiza a ${TAG}}"
   echo "    commit criado: $(git log --oneline -1)"
 fi

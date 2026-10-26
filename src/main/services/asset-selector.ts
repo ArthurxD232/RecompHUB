@@ -30,7 +30,8 @@ const UNUSABLE_SUFFIXES = [
 const UNUSABLE_TOKENS = [
   'symbols', 'sha256sums', 'checksums', 'source', 'src', 'sourcecode', 'debuginfo', 'pdbs',
   'notices', 'notice', 'lgpl', 'compliance', 'licenses', 'license', 'docs', 'manifest',
-  'update', 'patch'
+  'update', 'patch',
+  'flatpak', 'flatpakref', 'snap', 'snapcraft'
 ]
 
 const OTHER_PLATFORM_TOKENS = [

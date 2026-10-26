@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import { spawn } from 'child_process'
+import { spawn, execFileSync } from 'child_process'
 import {
   CatalogGame,
   GameRecipe,
@@ -24,6 +24,207 @@ export interface RecipeExecutionResult {
   portableMode: boolean
   status: 'READY_TO_PLAY' | 'NEEDS_ROM' | 'ERROR'
   logs: string[]
+}
+
+const BUNDLED_LUS_ARCHIVES = new Set([
+  '2ship.o2r',
+  'soh.otr',
+  'soh.o2r',
+  'ghostship.o2r',
+  'spaghettikart.o2r',
+  'starship.o2r',
+  'lighthouse.o2r',
+  'paperboat.o2r',
+  'battleship.o2r'
+])
+
+/**
+ * Compiles (once per session/boot) a tiny Linux LD_PRELOAD helper for HarbourMasters / Torch / Libultraship ports:
+ * 1. Overrides `GameExtractor::Parse` so Torch's broken dry-run pass (which re-parses shared YAML files
+ *    hundreds of times and hangs for ~103 seconds at "Reading <ROM>.z64... Reading ROM, please wait...")
+ *    returns immediately in 0ms.
+ * 2. When `RECOMPHUB_HEADLESS_EXTRACT=1` is set during post-install, runs `GameExtractor::RunStandalone` +
+ *    `GameExtractor::GenerateOTRTo` headlessly inside `__libc_start_main` (after C++ static constructors run),
+ *    generating the `.o2r` archive in ~1.8 seconds without opening any SDL window or popup.
+ */
+export function ensureLusFastExtractPreloadSo(): string | null {
+  if (process.platform !== 'linux') return null
+  const soPath = path.join(os.tmpdir(), 'recomphub-lus-fast-extract-v2.so')
+  if (fs.existsSync(soPath)) {
+    try {
+      if (fs.statSync(soPath).size > 4096) return soPath
+    } catch {
+      // Recompile below
+    }
+  }
+
+  const cppPath = path.join(os.tmpdir(), 'recomphub-lus-fast-extract-v2.cpp')
+  const cppSource = `
+#include <atomic>
+#include <string>
+#include <cstdio>
+#include <cstdlib>
+#include <dlfcn.h>
+
+extern "C" {
+
+bool _ZN13GameExtractor5ParseERSt6atomicImENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE(
+    void* /*self*/, std::atomic<size_t>& totalExtract, std::string /*o2rName*/) {
+    totalExtract = 2500;
+    return true;
+}
+
+bool _ZN13GameExtractor5ParseERSt6atomicImE(
+    void* /*self*/, std::atomic<size_t>& totalExtract) {
+    totalExtract = 2500;
+    return true;
+}
+
+typedef bool (*RunStandaloneFn)(void*, std::string);
+typedef bool (*GenerateOTRToFn)(void*, std::atomic<size_t>&, const std::string&, const std::string&);
+typedef bool (*GenerateOTR2Fn)(void*, std::atomic<size_t>&, std::string);
+typedef bool (*GenerateOTR1Fn)(void*, std::atomic<size_t>&);
+typedef int (*main_t)(int, char**, char**);
+
+static main_t real_main = nullptr;
+
+static int headless_main(int argc, char** argv, char** envp) {
+    const char* headless = getenv("RECOMPHUB_HEADLESS_EXTRACT");
+    const char* romPath = getenv("RECOMPHUB_ROM_PATH");
+    const char* installDir = getenv("RECOMPHUB_INSTALL_DIR");
+    const char* o2rBase = getenv("RECOMPHUB_O2R_BASENAME");
+
+    if (headless && headless[0] == '1' && romPath && romPath[0] != '\\0') {
+        auto runStandalone = (RunStandaloneFn)dlsym(
+            RTLD_DEFAULT,
+            "_ZN13GameExtractor13RunStandaloneENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE"
+        );
+        auto genOtrTo = (GenerateOTRToFn)dlsym(
+            RTLD_DEFAULT,
+            "_ZN13GameExtractor13GenerateOTRToERSt6atomicImERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESA_"
+        );
+        auto genOtr2 = (GenerateOTR2Fn)dlsym(
+            RTLD_DEFAULT,
+            "_ZN13GameExtractor11GenerateOTRERSt6atomicImENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE"
+        );
+        auto genOtr1 = (GenerateOTR1Fn)dlsym(
+            RTLD_DEFAULT,
+            "_ZN13GameExtractor11GenerateOTRERSt6atomicImE"
+        );
+
+        if (runStandalone && (genOtrTo || genOtr2 || genOtr1)) {
+            alignas(16) unsigned char extractorBuf[512] = {0};
+            fprintf(stdout, "[RecompHub] Generating O2R headlessly from %s...\\n", romPath);
+            fflush(stdout);
+            bool ok = runStandalone(extractorBuf, std::string(romPath));
+            if (ok) {
+                std::atomic<size_t> extractCount{0};
+                std::string o2rName = (o2rBase && o2rBase[0]) ? std::string(o2rBase) : std::string("sm64");
+                std::string outDir = (installDir && installDir[0]) ? std::string(installDir) : std::string(".");
+                bool genOk = false;
+                if (genOtrTo) {
+                    genOk = genOtrTo(extractorBuf, extractCount, o2rName, outDir);
+                } else if (genOtr2) {
+                    genOk = genOtr2(extractorBuf, extractCount, o2rName);
+                } else if (genOtr1) {
+                    genOk = genOtr1(extractorBuf, extractCount);
+                }
+                fprintf(stdout, "[RecompHub] Loaded ZIP (O2R) archive: %s/%s.o2r (ok=%d, assets=%zu)\\n",
+                        outDir.c_str(), o2rName.c_str(), (int)genOk, extractCount.load());
+                fflush(stdout);
+                if (genOk) {
+                    _Exit(0);
+                }
+            }
+        }
+    }
+
+    if (real_main) {
+        return real_main(argc, argv, envp);
+    }
+    return 1;
+}
+
+typedef int (*libc_start_main_t)(
+    main_t main, int argc, char** ubp_av,
+    void (*init)(void), void (*fini)(void),
+    void (*rtld_fini)(void), void* stack_end
+);
+
+int __libc_start_main(
+    main_t main, int argc, char** ubp_av,
+    void (*init)(void), void (*fini)(void),
+    void (*rtld_fini)(void), void* stack_end
+) {
+    real_main = main;
+    auto real_start = (libc_start_main_t)dlsym(RTLD_NEXT, "__libc_start_main");
+    return real_start(headless_main, argc, ubp_av, init, fini, rtld_fini, stack_end);
+}
+
+}
+`
+  try {
+    fs.writeFileSync(cppPath, cppSource, 'utf-8')
+    execFileSync('g++', ['-shared', '-fPIC', '-O2', cppPath, '-o', soPath, '-ldl'], {
+      stdio: 'ignore',
+      timeout: 10000
+    })
+    if (fs.existsSync(soPath)) return soPath
+  } catch {
+    // g++ not installed or compilation failed; fallback to standard execution
+  }
+  return null
+}
+
+/**
+ * Clears stuck `"ModalWindow": 1` in Libultraship config files (`*.cfg.json` / `*.json`)
+ * and removes any stray PS4 `tlg.ini` / `settings.json` that may have been created in non-PS4 directories.
+ */
+export function sanitizeN64PortDirectory(installDir: string): void {
+  if (!fs.existsSync(installDir)) return
+  try {
+    const entries = fs.readdirSync(installDir)
+    for (const name of entries) {
+      const lower = name.toLowerCase()
+      if (lower.endsWith('.cfg.json') || lower === '2ship2harkinian.json' || lower === 'shipofharkinian.json') {
+        const fullPath = path.join(installDir, name)
+        try {
+          const content = fs.readFileSync(fullPath, 'utf-8')
+          if (/("ModalWindow"\s*:\s*)1\b/.test(content)) {
+            const updated = content.replace(/("ModalWindow"\s*:\s*)1\b/g, '$10')
+            fs.writeFileSync(fullPath, updated, 'utf-8')
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // Remove stray PS4 files if present in an N64 directory
+    for (const stray of ['tlg.ini', path.join('user', 'tlg.ini'), path.join('user', 'settings.json')]) {
+      const p = path.join(installDir, stray)
+      if (fs.existsSync(p)) {
+        try {
+          fs.rmSync(p, { force: true })
+        } catch {
+          // Ignore
+        }
+      }
+    }
+    const settingsJsonPath = path.join(installDir, 'settings.json')
+    if (fs.existsSync(settingsJsonPath)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(settingsJsonPath, 'utf-8'))
+        if (parsed && typeof parsed.game_dir === 'string' && parsed.game_dir.toLowerCase().endsWith('.z64')) {
+          fs.rmSync(settingsJsonPath, { force: true })
+        }
+      } catch {
+        // Ignore
+      }
+    }
+  } catch {
+    // Ignore
+  }
 }
 
 export class RecipeService {
@@ -158,16 +359,22 @@ export class RecipeService {
         )
         pairedRomPaths.push(destPath)
 
-        // Also link with the original filename in installDir if different, so ports that look
-        // for original dump names or open a file picker in cwd find it immediately.
-        // NOTE: If the original file was an unconverted N64 format (.n64/.v64), do NOT create an unconverted
-        // duplicate that could cause asset extractors (like ZAPD) or recompilers to segfault!
+        // For N64 ports (HarbourMasters / Torch / ZAPD / N64Recomp), having multiple .z64 symlinks
+        // in installDir causes ROM pickers ("Select ROM Version") to pop up or extractors to run twice!
+        // Remove any other stale .z64/.n64/.v64 symlinks in installDir first.
+        if (isN64Game) {
+          this.cleanupExtraN64RomLinks(installDir, destPath)
+        }
+
+        // Also link with the original filename in installDir if different (ONLY for non-N64 games),
+        // so ports that look for original dump names or open a file picker in cwd find it immediately.
         const origDestPath = path.join(installDir, localEntry.fileName)
         const isUnconvertedN64Name =
           origDestPath.toLowerCase().endsWith('.n64') ||
           origDestPath.toLowerCase().endsWith('.v64')
 
         if (
+          !isN64Game &&
           !isUnconvertedN64Name &&
           path.resolve(origDestPath) !== path.resolve(destPath) &&
           !fs.existsSync(origDestPath)
@@ -264,9 +471,17 @@ export class RecipeService {
     // 3. Family-specific post-processing
     if (recipe.family === 'N64Recomp' && pairedRomPaths.length > 0) {
       this.patchN64RecompConfigIfNeeded(installDir, recipe, pairedRomPaths[0], log)
+      this.ensureN64RecompStoredRomLinks(
+        installDir,
+        recipe,
+        pairedRomPaths[0],
+        settings.linkStrategy,
+        log
+      )
     } else if (recipe.family === 'XenonRecomp' && pairedRomPaths.length > 0) {
       await this.runXenonIsoExtraction(installDir, pairedRomPaths[0], settings.extractXisoPath, log)
     } else if (recipe.family === 'AssetExtractor' && pairedRomPaths.length > 0) {
+      this.prepareLusExtractorEnvironment(installDir, log)
       await this.runAssetExtractorIfNeeded(installDir, recipe, pairedRomPaths[0], log)
     }
 
@@ -351,10 +566,12 @@ export class RecipeService {
     const romRequiredCount = recipe.requirements.filter((r) => !r.optional).length
     const romPaired = romRequiredCount === 0 || (allRequiredPaired && pairedRomPaths.length >= romRequiredCount)
 
-    const status = romPaired ? 'READY_TO_PLAY' : 'NEEDS_ROM'
+    const status = (romPaired && Boolean(execInfo.executablePath)) ? 'READY_TO_PLAY' : 'NEEDS_ROM'
     log(
       status === 'READY_TO_PLAY'
         ? 'Jogo configurado e pronto para jogar (READY_TO_PLAY)!'
+        : romPaired && !execInfo.executablePath
+        ? 'Aviso: ROM pareada, mas o executável principal não foi encontrado na pasta de instalação (NEEDS_ROM).'
         : 'Jogo instalado, aguardando pareamento da ROM/ISO exigida (NEEDS_ROM).'
     )
 
@@ -610,6 +827,24 @@ export class RecipeService {
     }
   }
 
+  private cleanupExtraN64RomLinks(installDir: string, keepRomPath: string): void {
+    try {
+      const keepResolved = path.resolve(keepRomPath)
+      const entries = fs.readdirSync(installDir)
+      for (const name of entries) {
+        const lower = name.toLowerCase()
+        if (!lower.endsWith('.z64') && !lower.endsWith('.n64') && !lower.endsWith('.v64')) continue
+        const fullPath = path.join(installDir, name)
+        if (path.resolve(fullPath) === keepResolved) continue
+        if (this.isSymlink(fullPath)) {
+          this.removeLinkIfAny(fullPath)
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
   private patchN64RecompConfigIfNeeded(
     installDir: string,
     recipe: GameRecipe,
@@ -637,6 +872,192 @@ export class RecipeService {
     } catch (err: any) {
       log(`Nota: Não foi necessário alterar ${configSpec.filename} (${err?.message}).`)
     }
+  }
+
+  /**
+   * Every N64Recomp (`librecomp` / `N64ModernRuntime`) port calls `recomp::check_stored_rom(entry)`
+   * at startup, which checks for `<config_dir>/<entry.game_id>.z64` (i.e. `<installDir>/<game_id>.z64`
+   * when `portable.txt` exists). If that exact filename is missing, the game prompts the user to
+   * select a ROM manually.
+   *
+   * This method automatically discovers `entry.game_id` by:
+   * 1. Checking known N64Recomp repository mappings.
+   * 2. Reading the 20-byte ASCII `internal_name` from offset `0x20..0x34` of the `.z64` ROM header
+   *    and scanning the N64Recomp executable's `.rodata`/`.rdata` section around `internal_name`
+   *    for the adjacent `game_id` string literal in `recomp::GameEntry`.
+   * 3. Creating `<game_id>.z64` linked to `pairedRomPath` in `installDir`.
+   */
+  private ensureN64RecompStoredRomLinks(
+    installDir: string,
+    recipe: GameRecipe,
+    pairedRomPath: string,
+    strategy: 'symlink' | 'hardlink' | 'copy',
+    log: (m: string) => void
+  ): void {
+    try {
+      sanitizeN64PortDirectory(installDir)
+      if (!fs.existsSync(pairedRomPath)) return
+
+      const candidateGameIds = new Set<string>()
+      const combined = `${recipe.id} ${recipe.repoFullName} ${recipe.title}`.toLowerCase()
+
+      const knownMappings: Array<{ match: string; gameIds: string[] }> = [
+        { match: 'zelda64recomp', gameIds: ['mm.n64.us.1.0', 'mm.n64.jp.1.1'] },
+        { match: 'banjorecomp', gameIds: ['bk.n64.us.1.0'] },
+        { match: 'banjotooie', gameIds: ['banjotooie.us', 'bt.n64.us.1.0'] },
+        { match: 'cbfd', gameIds: ['conker.us', 'cbfd.n64.us.1.0'] },
+        { match: 'aerogauge', gameIds: ['aerogauge.us'] },
+        { match: 'bm64recomp', gameIds: ['bm64_us'] },
+        { match: 'bmherorecomp', gameIds: ['bmhero'] },
+        { match: 'goemon64recomp', gameIds: ['mnsg.us'] },
+        { match: 'drmario64', gameIds: ['drmario64_us', 'drmario64.us'] },
+        { match: 'quest64', gameIds: ['quest64.us'] },
+        { match: 'dino', gameIds: ['dino.n64', 'dinosaurplanet'] },
+        { match: 'starfox64', gameIds: ['sf64.n64.us.1.1', 'sf64.n64.us.1.0', 'sf64.us'] },
+        { match: 'sm64recomp', gameIds: ['sm64.us', 'sm64.n64.us'] },
+        { match: 'mk64recomp', gameIds: ['mk64.us', 'mk64.n64.us'] },
+        { match: 'chameleontwist2', gameIds: ['ct2.us'] },
+        { match: 'chameleontwist', gameIds: ['ct1.us'] },
+        { match: 'buckbumble', gameIds: ['buck.us'] },
+        { match: 'rrow', gameIds: ['rrow.us'] },
+        { match: 'sssv', gameIds: ['sssv.us'] }
+      ]
+
+      for (const item of knownMappings) {
+        if (combined.includes(item.match)) {
+          for (const gid of item.gameIds) candidateGameIds.add(gid)
+        }
+      }
+
+      // Read 20-byte ASCII internal_name at offset 0x20..0x34 of Big-Endian .z64 ROM
+      const fd = fs.openSync(pairedRomPath, 'r')
+      const headerBuf = Buffer.alloc(0x40)
+      const bytesRead = fs.readSync(fd, headerBuf, 0, 0x40, 0)
+      fs.closeSync(fd)
+
+      if (bytesRead >= 0x34 && headerBuf.readUInt32BE(0) === 0x80371240) {
+        const internalName = headerBuf
+          .subarray(0x20, 0x34)
+          .toString('ascii')
+          .replace(/\0+$/g, '')
+          .trim()
+
+        if (internalName.length >= 3) {
+          const execInfo = this.findMainExecutable(installDir, recipe)
+          if (execInfo.executablePath && fs.existsSync(execInfo.executablePath)) {
+            const stat = fs.statSync(execInfo.executablePath)
+            // Scan binaries up to 120 MB
+            if (stat.size > 0 && stat.size <= 120 * 1024 * 1024) {
+              const binBuf = fs.readFileSync(execInfo.executablePath)
+              const needle = Buffer.from(internalName + '\0', 'ascii')
+              let searchFrom = 0
+              while (searchFrom < binBuf.length) {
+                const idx = binBuf.indexOf(needle, searchFrom)
+                if (idx === -1) break
+                searchFrom = idx + needle.length
+
+                const winStart = Math.max(0, idx - 256)
+                const winEnd = Math.min(binBuf.length, idx + 256)
+                const slice = binBuf.subarray(winStart, winEnd)
+
+                // Extract null-terminated ASCII strings in the window around internal_name
+                let cur = ''
+                for (let i = 0; i < slice.length; i++) {
+                  const b = slice[i]
+                  if (b >= 0x20 && b <= 0x7e) {
+                    cur += String.fromCharCode(b)
+                  } else {
+                    if (b === 0 && cur.length >= 3 && cur.length <= 36 && cur !== internalName) {
+                      if (
+                        /^[a-z0-9][a-z0-9._-]{1,34}[a-z0-9]$/i.test(cur) &&
+                        !/\.(cpp|hpp|c|h|toml|json|png|txt|dll|so|exe|z64|n64|v64)$/i.test(cur) &&
+                        !/^(gl|vk|sdl|rt64|recomp|ultramodern|rml|main|entry|true|false|null)/i.test(cur)
+                      ) {
+                        candidateGameIds.add(cur)
+                      }
+                    }
+                    cur = ''
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      for (const gameId of candidateGameIds) {
+        const storedRomName = gameId.toLowerCase().endsWith('.z64') ? gameId : `${gameId}.z64`
+        const storedRomPath = path.join(installDir, storedRomName)
+        if (path.resolve(storedRomPath) === path.resolve(pairedRomPath)) continue
+        if (!fs.existsSync(storedRomPath)) {
+          try {
+            this.createFileLink(pairedRomPath, storedRomPath, strategy)
+            log(`Vínculo N64Recomp (check_stored_rom) criado automaticamente: ${storedRomName}`)
+          } catch {
+            // Ignore
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Optimizes the extraction environment for HarbourMasters / Torch / Libultraship ports:
+   * 1. Resets stuck `"ModalWindow": 1` in `*.cfg.json` / `*.json`.
+   * 2. Injects `logging: CRITICAL` into `config.yml` (if present in `installDir`, e.g. on Windows)
+   *    so Torch doesn't write 25 MB of `[info]` logs to disk during extraction.
+   */
+  private prepareLusExtractorEnvironment(installDir: string, log: (m: string) => void): void {
+    sanitizeN64PortDirectory(installDir)
+    const configYmlPath = path.join(installDir, 'config.yml')
+    if (fs.existsSync(configYmlPath)) {
+      try {
+        const content = fs.readFileSync(configYmlPath, 'utf-8')
+        if (!content.includes('logging:')) {
+          const updated = content.replace(/^(\s*config:\s*)$/gm, '$1\n    logging: CRITICAL')
+          if (updated !== content) {
+            fs.writeFileSync(configYmlPath, updated, 'utf-8')
+            log('Configuração config.yml otimizada (logging: CRITICAL) para extração rápida de assets.')
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
+  private hasExpectedLusOutput(installDir: string, requiredArchives: string[]): boolean {
+    if (requiredArchives.length === 0) return false
+    try {
+      const entries = fs.readdirSync(installDir)
+      for (const reqName of requiredArchives) {
+        if (reqName.startsWith('.')) {
+          // Heuristic extension check (e.g. '.o2r', '.otr')
+          const found = entries.some((e) => {
+            const lower = e.toLowerCase()
+            if (BUNDLED_LUS_ARCHIVES.has(lower)) return false
+            if (!lower.endsWith(reqName.toLowerCase())) return false
+            try {
+              return fs.statSync(path.join(installDir, e)).size > 1024 * 1024
+            } catch {
+              return false
+            }
+          })
+          if (found) return true
+        } else {
+          const p = path.join(installDir, reqName)
+          if (fs.existsSync(p)) {
+            const st = fs.statSync(p)
+            if (st.isDirectory() || st.size > 1024 * 1024) return true
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    return false
   }
 
   private async runXenonIsoExtraction(
@@ -695,24 +1116,18 @@ export class RecipeService {
 
     const files = this.listFilesRecursive(installDir, 2)
 
-    // Check if expected output packages are already generated (e.g. mm.o2r, oot.o2r)
+    // Check if expected output packages are already generated (e.g. mm.o2r, oot.o2r, sm64.o2r)
     const expectedOutputs = extCfg.expectedOutputFiles || []
     const requiredArchives = expectedOutputs.filter(
-      (name) => name !== '2ship.o2r' && name !== 'soh.otr'
+      (name) => !BUNDLED_LUS_ARCHIVES.has(name.toLowerCase())
     )
-    const allExpectedGenerated =
-      requiredArchives.length > 0 &&
-      requiredArchives.every((name) => {
-        const p = path.join(installDir, name)
-        return fs.existsSync(p) && fs.statSync(p).size > 1024 * 1024
-      })
 
-    if (allExpectedGenerated) {
-      log(`Pacotes de assets (${requiredArchives.join(', ')}) já se encontram gerados. Pronto para jogar!`)
+    if (this.hasExpectedLusOutput(installDir, requiredArchives)) {
+      log(`Pacote de assets (${requiredArchives.join(' / ')}) já se encontra gerado na pasta do jogo. Pronto para jogar!`)
       return
     }
 
-    // 1. Check if dedicated CLI extractor binary (like OpenGOAL's `extractor` or `torch`) exists
+    // 1. Check if dedicated CLI extractor binary (like OpenGOAL's `extractor` or standalone `torch`) exists
     let dedicatedExtractor = files.find((f) => {
       const base = path.basename(f).toLowerCase()
       return (
@@ -727,23 +1142,45 @@ export class RecipeService {
       arg.replace('{ROM_PATH}', romPath).replace('{INSTALL_DIR}', installDir)
     )
 
-    // 2. If no standalone extractor binary, look for integrated ports (like 2Ship2Harkinian, Ship of Harkinian)
+    // 2. If no standalone extractor binary, look for integrated HarbourMasters / Libultraship ports
     if (!dedicatedExtractor) {
-      const execCandidate = files.find((f) => {
+      const patternCandidates = (extCfg.binaryPatterns || []).map((p) => p.toLowerCase())
+      let execCandidate = files.find((f) => {
         const base = path.basename(f).toLowerCase()
+        if (patternCandidates.some((pat) => base === pat || base.includes(pat))) {
+          return (
+            base.endsWith('.appimage') ||
+            base.endsWith('.exe') ||
+            this.isElfBinary(f)
+          )
+        }
         return (
           base.includes('2ship') ||
           base.includes('soh') ||
-          base.includes('spaghettikart')
+          base.includes('spaghettikart') ||
+          base.includes('ghostship') ||
+          base.includes('starship') ||
+          base.includes('lighthouse') ||
+          base.includes('paperboat') ||
+          base.includes('battleship')
         )
       })
 
+      if (!execCandidate) {
+        const mainExec = this.findMainExecutable(installDir, recipe)
+        if (mainExec.executablePath) {
+          execCandidate = mainExec.executablePath
+        }
+      }
+
       if (execCandidate) {
         dedicatedExtractor = execCandidate
+        // Passing romPath as CLI argument causes Libultraship/Torch ports to enter ES_EXTRACT_ARGS
+        // directly instead of stopping on the "No O2R files found. Generate one now?" popup.
         if (execCandidate.toLowerCase().endsWith('.appimage')) {
-          extractorArgs = ['--appimage-extract-and-run']
+          extractorArgs = ['--appimage-extract-and-run', romPath]
         } else {
-          extractorArgs = []
+          extractorArgs = [romPath]
         }
       }
     }
@@ -763,7 +1200,24 @@ export class RecipeService {
       }
     }
 
-    log(`Iniciando geração de assets (.o2r/.otr) com ${path.basename(dedicatedExtractor)}...`)
+    const firstExpected = requiredArchives.find((n) => !n.startsWith('.')) || 'sm64.o2r'
+    const o2rBaseName = path.parse(firstExpected).name || 'sm64'
+    const preloadSo = ensureLusFastExtractPreloadSo()
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      APPIMAGE_EXTRACT_AND_RUN: '1',
+      RECOMPHUB_HEADLESS_EXTRACT: '1',
+      RECOMPHUB_ROM_PATH: romPath,
+      RECOMPHUB_INSTALL_DIR: installDir,
+      RECOMPHUB_O2R_BASENAME: o2rBaseName
+    }
+    if (preloadSo) {
+      childEnv.LD_PRELOAD = childEnv.LD_PRELOAD
+        ? `${preloadSo}:${childEnv.LD_PRELOAD}`
+        : preloadSo
+    }
+
+    log(`Iniciando geração rápida de assets (.o2r/.otr) com ${path.basename(dedicatedExtractor)}...`)
 
     await new Promise<void>((resolve) => {
       let finished = false
@@ -783,18 +1237,13 @@ export class RecipeService {
           } catch {
             // Ignore
           }
+          sanitizeN64PortDirectory(installDir)
           resolve()
         }, 500)
       }
 
       const checkOutputFiles = (): void => {
-        if (
-          requiredArchives.length > 0 &&
-          requiredArchives.every((name) => {
-            const p = path.join(installDir, name)
-            return fs.existsSync(p) && fs.statSync(p).size > 1024 * 1024
-          })
-        ) {
+        if (this.hasExpectedLusOutput(installDir, requiredArchives)) {
           finishOnce('Arquivo(s) .o2r/.otr gerado(s) com sucesso na raiz do jogo!')
         }
       }
@@ -802,7 +1251,8 @@ export class RecipeService {
       const pollInterval = setInterval(checkOutputFiles, 1000)
 
       const child = spawn(dedicatedExtractor, extractorArgs, {
-        cwd: installDir
+        cwd: installDir,
+        env: childEnv
       })
 
       const handleData = (d: Buffer): void => {
@@ -817,7 +1267,8 @@ export class RecipeService {
             line.includes('/ 660') ||
             line.includes('Generating OTR') ||
             line.includes('Generating O2R') ||
-            line.includes('Loaded ZIP (O2R)')
+            line.includes('Loaded ZIP (O2R)') ||
+            line.includes('[RecompHub]')
           ) {
             log(`[AssetExtractor] ${line}`)
           }
@@ -845,6 +1296,8 @@ export class RecipeService {
         clearInterval(pollInterval)
         checkOutputFiles()
         if (!finished) {
+          finished = true
+          sanitizeN64PortDirectory(installDir)
           log(`Processo de extração finalizado (código ${code ?? 0}).`)
           resolve()
         }

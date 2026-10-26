@@ -136,6 +136,21 @@ const cases = [
     name: 'Versão com "32" no nome não é confundida com build 32 bits',
     assets: assets('game-0.32.0-linux.tar.gz', 'game-0.32.0-linux-x86_64.tar.gz'),
     expect: { linux: 'game-0.32.0-linux-x86_64.tar.gz' }
+  },
+  {
+    name: 'Zelda64Recomp: ignora Flatpak (mesmo em .zip) e escolhe Linux-X64 standalone',
+    assets: assets(
+      'Zelda64Recompiled-v1.2.2-Linux-ARM64.zip',
+      'Zelda64Recompiled-v1.2.2-Linux-Flatpak-X64.zip',
+      'Zelda64Recompiled-v1.2.2-Linux-X64.zip',
+      'Zelda64Recompiled-v1.2.2-macOS.zip',
+      'Zelda64Recompiled-v1.2.2-Windows.zip'
+    ),
+    expect: {
+      win: 'Zelda64Recompiled-v1.2.2-Windows.zip',
+      linux: 'Zelda64Recompiled-v1.2.2-Linux-X64.zip',
+      proton: 'Zelda64Recompiled-v1.2.2-Windows.zip'
+    }
   }
 ]
 

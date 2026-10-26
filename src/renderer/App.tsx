@@ -7,7 +7,9 @@ import {
   LayoutGrid,
   Library as LibraryIcon,
   Settings as SettingsIcon,
-  Users
+  Square,
+  Users,
+  X
 } from 'lucide-react'
 import { Sidebar, NavTab } from './components/Sidebar'
 import { Catalog } from './pages/Catalog'
@@ -50,6 +52,8 @@ export function App(): React.ReactElement {
   const [hostPlatform, setHostPlatform] = useState<string>('linux')
 
   const [selectedGame, setSelectedGame] = useState<CatalogGame | null>(null)
+  const [stopConfirmGameId, setStopConfirmGameId] = useState<string | null>(null)
+  const [stoppingGame, setStoppingGame] = useState<boolean>(false)
   const [scanProgress, setScanProgress] = useState<{
     current: number
     total: number
@@ -184,6 +188,10 @@ export function App(): React.ReactElement {
     async (game: CatalogGame, e: React.MouseEvent): Promise<void> => {
       e.stopPropagation()
       const inst = libraryRef.current.find((i) => i.gameId === game.id)
+      if (inst && inst.status === 'RUNNING') {
+        setStopConfirmGameId(game.id)
+        return
+      }
       if (inst && inst.status === 'READY_TO_PLAY') {
         try {
           await window.api.launchGame(game.id)
@@ -202,7 +210,20 @@ export function App(): React.ReactElement {
   }
 
   const handleStopGame = async (gameId: string): Promise<void> => {
-    await window.api.stopGame(gameId)
+    setStopConfirmGameId(gameId)
+  }
+
+  const handleConfirmStopGame = async (): Promise<void> => {
+    if (!stopConfirmGameId || stoppingGame) return
+    setStoppingGame(true)
+    try {
+      await window.api.stopGame(stopConfirmGameId)
+      const updatedLib = await window.api.getLibrary()
+      setLibrary(updatedLib)
+      setStopConfirmGameId(null)
+    } finally {
+      setStoppingGame(false)
+    }
   }
 
   const handleCancelDownload = async (taskId: string): Promise<void> => {
@@ -552,6 +573,79 @@ export function App(): React.ReactElement {
           </div>
         </div>
       </footer>
+
+      {/* Modal de Confirmação para Encerrar Jogo em Execução */}
+      {stopConfirmGameId && (() => {
+        const stopTargetInst = library.find((i) => i.gameId === stopConfirmGameId)
+        const stopTargetCat = catalog.find(
+          (c) => c.id === stopConfirmGameId || c.ports?.some((p) => p.id === stopConfirmGameId)
+        )
+        const stopTitle =
+          stopTargetInst?.title || stopTargetCat?.title || selectedGame?.title || 'o jogo'
+        const stopProject = stopTargetInst?.projectName || stopTargetCat?.projectName
+
+        return (
+          <div className="fixed inset-0 z-[60] bg-black/75 flex items-center justify-center p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="stop-game-title"
+              className="w-full max-w-md bg-[#1b2838] border border-[#354c66] rounded-lg shadow-2xl overflow-hidden"
+            >
+              <div className="px-5 py-3.5 bg-[#171d25] border-b border-[#2a3846] flex items-center justify-between">
+                <div
+                  id="stop-game-title"
+                  className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white"
+                >
+                  <Square className="w-3.5 h-3.5 text-red-400 fill-current" />
+                  <span>ENCERRAR JOGO EM EXECUÇÃO</span>
+                </div>
+                <button
+                  onClick={() => !stoppingGame && setStopConfirmGameId(null)}
+                  disabled={stoppingGame}
+                  aria-label="Fechar"
+                  className="text-[#8f98a0] hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 text-xs text-[#c7d5e0]">
+                <p className="leading-relaxed">
+                  Tem certeza de que deseja encerrar{' '}
+                  <strong className="text-white">
+                    {stopTitle}
+                    {stopProject ? ` (${stopProject})` : ''}
+                  </strong>{' '}
+                  agora?
+                </p>
+                <p className="text-[11px] text-[#8f98a0] leading-relaxed">
+                  O jogo e todos os processos associados serão fechados por completo imediatamente. Qualquer progresso não salvo dentro do jogo poderá ser perdido.
+                </p>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#263649]">
+                  <button
+                    onClick={() => setStopConfirmGameId(null)}
+                    disabled={stoppingGame}
+                    autoFocus
+                    className="px-4 py-2 rounded-md bg-[#2a3846] hover:bg-[#37495b] text-xs font-bold uppercase tracking-wider text-[#dcdedf]"
+                  >
+                    Não, continuar jogando
+                  </button>
+                  <button
+                    onClick={handleConfirmStopGame}
+                    disabled={stoppingGame}
+                    className="px-5 py-2 rounded-md bg-[#c93838] hover:bg-[#e04343] text-xs font-bold uppercase tracking-wider text-white shadow flex items-center gap-1.5"
+                  >
+                    <Square className="w-3 h-3 fill-current" />
+                    <span>{stoppingGame ? 'Encerrando...' : 'Sim, encerrar jogo'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
