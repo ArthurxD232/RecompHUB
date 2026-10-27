@@ -10,7 +10,10 @@ import {
   RomVaultEntry
 } from '../../shared/types'
 import { StoreService } from './store.service'
-import { withPatchRequirement } from '../../shared/requirements'
+import {
+  genericIsoRequirement,
+  withPatchRequirement
+} from '../../shared/requirements'
 import {
   extractPkgSet,
   extractPkgSetExternal,
@@ -194,17 +197,11 @@ export class RomVaultService {
   private getRequirements(game: CatalogGame): RomRequirement[] {
     const recipe = game.recipe
     const base: RomRequirement[] =
-      recipe && recipe.requirements.length > 0
-        ? recipe.requirements
-        : [
-            {
-              id: `${game.id}_rom`,
-              label: `${game.title} — ISO / ROM Original`,
-              type: 'iso',
-              expectedFilename: 'game.iso',
-              extensions: ['.iso', '.bin', '.z64', '.n64', '.rom']
-            }
-          ]
+      recipe
+        ? recipe.requirements.length > 0
+          ? recipe.requirements
+          : [genericIsoRequirement(game.id, game.title, true)]
+        : [genericIsoRequirement(game.id, game.title)]
     // Todo jogo ganha o espaço opcional de patches/atualizações/DLC
     return withPatchRequirement(base)
   }

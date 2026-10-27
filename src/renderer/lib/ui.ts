@@ -53,6 +53,7 @@ export function findActiveDownload(
 
 const BADGE_ABBR: Record<string, string> = {
   GameCube: 'GC',
+  'Xbox Original': 'XB',
   'Xbox 360': '360',
   'Sega CD': 'CD',
   'PC / Outros': 'PC',

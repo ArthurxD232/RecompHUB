@@ -1,0 +1,13 @@
+Resumo das alteracoes
+
+- Adicionados Rusty MCLA e Midnight Club 3 (xrevive) a lista de ports da comunidade, com as categorias Xbox 360 e Xbox Original.
+- A sincronizacao remota agora preserva os ports embarcados que ainda nao foram publicados no repositorio remoto.
+- Adicionada uma opcao para baixar o launcher sem selecionar ISO/ROM e, depois, abrir o launcher diretamente.
+- Receitas sem requisitos agora mostram a selecao de ISO/ROM como opcional; a ISO pode ser associada pelo Cofre sem se tornar obrigatoria para abrir o launcher.
+- Atualizados os textos e o status da interface para distinguir ISO/ROM opcional de ISO/ROM pareada.
+
+Validacao
+
+- `npm run typecheck` passou.
+- `npm run test:vault` nao executou porque Python nao esta instalado neste ambiente.
+- A pasta local de build `release-portable/` nao faz parte deste pull request.

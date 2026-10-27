@@ -95,7 +95,14 @@ export class CommunityService {
             return { ports: this.cachedPorts, lastUpdated: this.lastUpdated, source: 'live' }
           }
 
-          const prepared = this.preparePorts(rawJson)
+          const remoteIds = new Set(rawJson.map((port) => port.id))
+          const mergedPorts = [
+            ...rawJson,
+            ...(bundledCommunityPorts as CommunityPort[]).filter(
+              (port) => !remoteIds.has(port.id)
+            )
+          ]
+          const prepared = this.preparePorts(mergedPorts)
           this.cachedPorts = prepared
           this.rawSignature = signature
 
