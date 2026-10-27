@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import { CoverFallback } from './CoverFallback'
 import { familyLabel } from '../lib/ui'
+import { genericIsoRequirement } from '../../shared/requirements'
 import {
   CatalogGame,
   DownloadTaskProgress,
@@ -400,6 +401,20 @@ export const GameModal: React.FC<GameModalProps> = ({
     onInstall(activeGame)
   }
 
+  const handleDownloadLauncher = (): void => {
+    setLaunchError(null)
+    onInstall(activeGame)
+  }
+
+  const handleLaunchWithoutRom = async (): Promise<void> => {
+    setLaunchError(null)
+    try {
+      await onLaunch(activeGame.id)
+    } catch (err: any) {
+      setLaunchError(err?.message || String(err))
+    }
+  }
+
   const handleLaunchClick = async (): Promise<void> => {
     setLaunchError(null)
     if (!romStatus?.ready) {
@@ -427,19 +442,18 @@ export const GameModal: React.FC<GameModalProps> = ({
 
   const recipe = activeGame.recipe
   const requirements: RomRequirement[] = (
-    recipe && recipe.requirements.length > 0
-      ? recipe.requirements
-      : ([
-          {
-            id: `${activeGame.id}_rom`,
-            label: `${activeGame.title} — ISO / ROM Original`,
-            type: 'iso',
-            expectedFilename: 'game.iso',
-            extensions: ['.iso', '.bin', '.z64', '.n64', '.rom']
-          }
-        ] as RomRequirement[])
+    recipe
+      ? recipe.requirements.length > 0
+        ? recipe.requirements
+        : [genericIsoRequirement(activeGame.id, activeGame.title, true)]
+      : [genericIsoRequirement(activeGame.id, activeGame.title)]
   ).filter((r) => r.type !== 'patch')
   const hasFolderRequirement = requirements.some((r) => r.type === 'folder')
+  const hasOptionalRomRequirement = requirements.some((r) => r.optional)
+  const hasPairedRom = romStatus?.matchedRequirements.some(
+    (match) =>
+      match.requirement.type !== 'patch' && match.status === 'local_vault'
+  )
 
   const patchMatch = romStatus?.matchedRequirements.find((m) => m.requirement.type === 'patch')
   const patchEntries = patchMatch?.localEntries ?? []
@@ -648,16 +662,29 @@ export const GameModal: React.FC<GameModalProps> = ({
                 <span>PARAR</span>
               </button>
             ) : (
-              <button
-                onClick={handleLaunchClick}
-                disabled={actionBusy}
-                className="steam-btn-green px-9 py-2.5 rounded-md text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow-md"
-              >
-                <Play className="w-4 h-4 fill-current" />
-                <span>
-                  {romStatus?.ready ? 'JOGAR' : 'ESCOLHER ISO E JOGAR'}
-                </span>
-              </button>
+              <>
+                <button
+                  onClick={handleLaunchClick}
+                  disabled={actionBusy}
+                  className="steam-btn-green px-9 py-2.5 rounded-md text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow-md"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>
+                    {romStatus?.ready ? 'JOGAR' : 'ESCOLHER ISO E JOGAR'}
+                  </span>
+                </button>
+                {!romStatus?.ready && (
+                  <button
+                    onClick={handleLaunchWithoutRom}
+                    disabled={actionBusy || !activeInstalled.executablePath}
+                    title="Abrir o launcher sem selecionar uma ISO/ROM"
+                    className="px-5 py-2.5 rounded-md bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#dcdedf] text-xs font-bold uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>ABRIR LAUNCHER</span>
+                  </button>
+                )}
+              </>
             )
           ) : isDownloading && activeDownloadTask ? (
             <div className="flex items-center gap-2">
@@ -682,20 +709,31 @@ export const GameModal: React.FC<GameModalProps> = ({
               )}
             </div>
           ) : (
-            <button
-              onClick={handleInstallClick}
-              disabled={actionBusy || Boolean(releaseError)}
-              className="steam-btn-blue px-8 py-2.5 rounded-md text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow-md disabled:opacity-50"
-            >
-              <Download className="w-4 h-4" />
-              <span>
-                {releaseError
-                  ? 'RELEASE INDISPONÍVEL NO GITHUB'
-                  : romStatus?.ready
-                    ? 'INSTALAR'
-                    : 'ESCOLHER ISO E INSTALAR'}
-              </span>
-            </button>
+            <>
+              <button
+                onClick={handleInstallClick}
+                disabled={actionBusy || Boolean(releaseError)}
+                className="steam-btn-blue px-8 py-2.5 rounded-md text-white text-sm font-bold uppercase tracking-wider flex items-center gap-2.5 shadow-md disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                <span>
+                  {releaseError
+                    ? 'RELEASE INDISPONÍVEL NO GITHUB'
+                    : romStatus?.ready
+                      ? 'INSTALAR'
+                      : 'ESCOLHER ISO E INSTALAR'}
+                </span>
+              </button>
+              <button
+                onClick={handleDownloadLauncher}
+                disabled={actionBusy || Boolean(releaseError)}
+                title="Baixar e preparar o launcher sem selecionar uma ISO/ROM"
+                className="px-5 py-2.5 rounded-md bg-[#2a3846] hover:bg-[#36495c] border border-[#3a4d63] text-[#dcdedf] text-xs font-bold uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>BAIXAR SÓ O LAUNCHER</span>
+              </button>
+            </>
           )}
 
           {/* Steam Uppercase Metadata Columns */}
@@ -707,6 +745,14 @@ export const GameModal: React.FC<GameModalProps> = ({
               <div className="font-semibold mt-0.5">
                 {romLoading ? (
                   <span className="text-[#8f98a0]">Verificando...</span>
+                ) : hasPairedRom ? (
+                  <span className="text-[#6cc034] flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Pareada e Pronta
+                  </span>
+                ) : romStatus?.ready && hasOptionalRomRequirement ? (
+                  <span className="text-[#8f98a0] flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Opcional — não selecionada
+                  </span>
                 ) : romStatus?.ready ? (
                   <span className="text-[#6cc034] flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Pareada e Pronta

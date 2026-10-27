@@ -31,12 +31,12 @@ const STEPS: { icon: React.ReactNode; title: string; text: string }[] = [
   {
     icon: <GitBranch className="w-4 h-4" aria-hidden="true" />,
     title: 'Ports reais do GitHub',
-    text: 'Só entram recompilações, descompilações e ports nativos de jogos, com release pronta para Windows ou Linux.'
+    text: 'Ports, recompilações, descompilações e launchers de projetos comunitários com versões para PC.'
   },
   {
     icon: <HardDrive className="w-4 h-4" aria-hidden="true" />,
-    title: 'A ISO/ROM é sua',
-    text: 'Nada de jogo é baixado. Você aponta o seu arquivo e o RecompHUB cuida do resto, igual ao catálogo do PortsDR.'
+    title: 'Arquivos originais',
+    text: 'O RecompHUB não fornece arquivos de jogo. Cada port ou launcher informa o que você precisa adicionar.'
   },
   {
     icon: <Lightbulb className="w-4 h-4" aria-hidden="true" />,

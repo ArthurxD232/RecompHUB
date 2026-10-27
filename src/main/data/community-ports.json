@@ -1,5 +1,94 @@
 [
   {
+    "id": "community__holdmysocks__rusty-mcla",
+    "title": "Midnight Club: Los Angeles",
+    "projectName": "Rusty MCLA",
+    "repoFullName": "holdmysocks/rusty-mcla",
+    "githubUrl": "https://github.com/holdmysocks/rusty-mcla",
+    "releaseUrl": "https://github.com/holdmysocks/rusty-mcla/releases/latest",
+    "imageUrl": "https://raw.githubusercontent.com/holdmysocks/rusty-mcla/main/assets/launcher-home.png",
+    "console": "Xbox 360",
+    "consoleBadge": "Xbox 360",
+    "version": "v0.6.1",
+    "releaseStatus": "Latest",
+    "platforms": [
+      "Windows"
+    ],
+    "updatedAt": "2026-10-25T01:15:05Z",
+    "submittedBy": "Curadoria RecompHUB",
+    "approvedAt": "2026-10-26T00:00:00Z",
+    "verificationLevel": "community",
+    "inferredFamily": "GenericNative",
+    "toolchainType": "Launcher e engine nativa em Rust",
+    "howItWorks": "O launcher Rusty MCLA prepara os dados localmente a partir da imagem original de Midnight Club: Los Angeles Complete Edition para Xbox 360 e executa o jogo nativamente no Windows.",
+    "description": "Launcher portátil para Midnight Club: Los Angeles Complete Edition. A ISO original é necessária para preparar os dados do jogo, mas é selecionada dentro do próprio launcher e não é distribuída.",
+    "highlights": [
+      "Launcher portátil para Windows 10 e 11",
+      "Prepara os dados do jogo localmente a partir do disco",
+      "Renderização Vulkan ou DirectX 12",
+      "Projeto em desenvolvimento inicial"
+    ],
+    "differences": "Requer a edição Complete Edition dos EUA ou Europa e cerca de 14 GB livres para os dados preparados. O launcher não inclui arquivos do jogo.",
+    "recipe": {
+      "id": "community_rusty_mcla",
+      "repoFullName": "holdmysocks/rusty-mcla",
+      "title": "Midnight Club: Los Angeles (Rusty MCLA)",
+      "console": "Xbox 360",
+      "family": "GenericNative",
+      "createPortableTxt": false,
+      "executableHints": [
+        "RustyMCLA.exe"
+      ],
+      "requirements": [],
+      "notes": "Baixa e executa o launcher sem exigir uma ISO no RecompHUB. Para preparar os dados do jogo, use sua própria imagem de Midnight Club: Los Angeles Complete Edition (EUA ou Europa) dentro do Rusty MCLA."
+    }
+  },
+  {
+    "id": "community__teraflopping__xrevive",
+    "title": "Midnight Club 3",
+    "projectName": "xrevive Launcher",
+    "repoFullName": "Teraflopping/xrevive",
+    "githubUrl": "https://github.com/Teraflopping/xrevive",
+    "releaseUrl": "https://github.com/Teraflopping/xrevive/releases/latest",
+    "console": "Xbox Original",
+    "consoleBadge": "Xbox Original",
+    "version": "v0.2.4",
+    "releaseStatus": "Latest",
+    "platforms": [
+      "Windows",
+      "Linux"
+    ],
+    "updatedAt": "2026-10-26T21:28:31Z",
+    "submittedBy": "Curadoria RecompHUB",
+    "approvedAt": "2026-10-26T00:00:00Z",
+    "verificationLevel": "community",
+    "inferredFamily": "GenericNative",
+    "toolchainType": "Launcher de jogos recompilados com Xrecomp",
+    "howItWorks": "O xrevive gerencia jogos de Xbox Original recompilados com Xrecomp, reconhece a ISO ou pasta fornecida pelo usuário e baixa o executável correspondente quando disponível.",
+    "description": "Launcher para jogos Xrecomp com biblioteca, gerenciamento de saves e integração com os serviços online xb.live. O app e os executáveis hospedados não incluem ISOs ou assets dos jogos.",
+    "highlights": [
+      "Windows x64 e Linux (AppImage)",
+      "Reconhece ISOs e pastas de jogos adicionadas pelo usuário",
+      "Baixa builds Release correspondentes quando disponíveis",
+      "Gerencia saves, atualizações e DLC",
+      "Execução no Linux via Wine ou Proton é experimental"
+    ],
+    "differences": "O launcher para Windows é distribuído como instalador; no Linux há AppImage. Os executáveis hospedados dos jogos são builds Windows x64.",
+    "recipe": {
+      "id": "community_xrevive",
+      "repoFullName": "Teraflopping/xrevive",
+      "title": "Midnight Club 3 (xrevive)",
+      "console": "Xbox",
+      "family": "GenericNative",
+      "createPortableTxt": false,
+      "executableHints": [
+        "xrevive.exe"
+      ],
+      "requirements": [],
+      "notes": "O launcher é instalado sem exigir ISO pelo RecompHUB. Adicione seus próprios arquivos de jogo no xrevive; nada de jogos é distribuído pelo projeto."
+    }
+  },
+  {
     "id": "community__thegh0stship__battletanx-global-assault-pc-port",
     "title": "BattleTanx: Global Assault",
     "projectName": "BattleTanx GA PC Port",
